@@ -32,7 +32,7 @@ from zipline.assets.asset_db_schema import (
     futures_contracts as futures_contracts_table,
     options_contracts as options_contracts_table,
     exchanges as exchanges_table,
-    futures_root_symbols,
+    root_symbols as root_symbols_table,
     metadata,
     version_info,
 )
@@ -439,7 +439,7 @@ def check_version_info(conn, version_table, expected_version):
         version_from_table = 0
 
     # Raise an error if the versions do not match
-    if (version_from_table != expected_version):
+    if version_from_table != expected_version:
         raise AssetDBVersionError(db_version=version_from_table,
                                   expected_version=expected_version)
 
@@ -502,7 +502,7 @@ class AssetDBWriter(object):
 
             if root_symbols is not None:
                 self._write_df_to_table(
-                    futures_root_symbols,
+                    root_symbols_table,
                     root_symbols,
                     conn,
                     chunk_size,
@@ -665,10 +665,10 @@ class AssetDBWriter(object):
             )
 
         if futures is not None:
-            futures = _generate_output_dataframe(_futures_defaults, futures)
+            futures = _generate_output_dataframe(futures, _futures_defaults)
 
         if options is not None:
-            futures = _generate_output_dataframe(_options_defaults, options)
+            futures = _generate_output_dataframe(options, _options_defaults)
 
         if exchanges is not None:
             exchanges = _generate_output_dataframe(

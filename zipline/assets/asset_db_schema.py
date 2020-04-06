@@ -17,7 +17,7 @@ asset_db_table_names = frozenset({
     'equity_supplementary_mappings',
     'futures_contracts',
     'exchanges',
-    'futures_root_symbols',
+    'root_symbols',
     'options_contracts',
     'options_root_symbols',
     'version_info',
@@ -116,8 +116,8 @@ equity_supplementary_mappings = sa.Table(
     sa.Column('value', sa.Text, nullable=False),
 )
 
-futures_root_symbols = sa.Table(
-    'futures_root_symbols',
+root_symbols = sa.Table(
+    'root_symbols',
     metadata,
     sa.Column(
         'root_symbol',
@@ -150,7 +150,7 @@ futures_contracts = sa.Table(
     sa.Column(
         'root_symbol',
         sa.Text,
-        sa.ForeignKey(futures_root_symbols.c.root_symbol),
+        sa.ForeignKey(root_symbols.c.root_symbol),
         index=True
     ),
     sa.Column('asset_name', sa.Text),
@@ -169,26 +169,6 @@ futures_contracts = sa.Table(
     sa.Column('tick_size', sa.Float),
 )
 
-options_root_symbols = sa.Table(
-    'options_root_symbols',
-    metadata,
-    sa.Column(
-        'root_symbol',
-        sa.Text,
-        unique=True,
-        nullable=False,
-        primary_key=True,
-    ),
-    sa.Column('root_symbol_id', sa.Integer),
-    sa.Column('sector', sa.Text),
-    sa.Column('description', sa.Text),
-    sa.Column(
-        'exchange',
-        sa.Text,
-        sa.ForeignKey(exchanges.c.exchange),
-    ),
-)
-
 options_contracts = sa.Table(
     'options_contracts',
     metadata,
@@ -202,7 +182,7 @@ options_contracts = sa.Table(
     sa.Column(
         'symbol',
         sa.Text,
-        sa.ForeignKey('options_root_symbols.symbol'),
+        sa.ForeignKey(root_symbols.c.root_symbol),
         index=True
     ),
     sa.Column('occ_symbol', sa.Text, index=True),

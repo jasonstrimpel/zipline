@@ -412,7 +412,7 @@ def _downgrade_v7(op):
     # rebuild all tables without a foreign key to ``exchanges``
     alter_columns(
         op,
-        'futures_root_symbols',
+        'root_symbols',
         sa.Column(
             'root_symbol',
             sa.Text,
@@ -470,7 +470,7 @@ def _downgrade_v7(op):
     # add back the foreign keys that previously existed
     alter_columns(
         op,
-        'futures_root_symbols',
+        'root_symbols',
         sa.Column(
             'root_symbol',
             sa.Text,
@@ -501,7 +501,7 @@ def _downgrade_v7(op):
         sa.Column(
             'root_symbol',
             sa.Text,
-            sa.ForeignKey('futures_root_symbols.root_symbol'),
+            sa.ForeignKey('root_symbols.root_symbol'),
             index=True
         ),
         sa.Column('asset_name', sa.Text),
