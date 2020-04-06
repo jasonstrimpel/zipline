@@ -452,6 +452,17 @@ class FutureContractsNotFound(SidsNotFound):
         return "No future contract found for sid: {sids[0]}."
 
 
+class OptionContractsNotFound(SidsNotFound):
+    """
+    Raised when a call to `retrieve_options_contracts` fails to find an asset.
+    """
+    @lazyval
+    def msg(self):
+        if self.plural:
+            return "No option contracts found for sids: {sids}."
+        return "No option contract found for sid: {sids[0]}."
+
+
 class ConsumeAssetMetaDataError(ZiplineError):
     """
     Raised when AssetFinder.consume() is called on an invalid object.

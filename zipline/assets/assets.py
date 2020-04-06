@@ -42,6 +42,7 @@ from toolz import (
 from zipline.errors import (
     EquitiesNotFound,
     FutureContractsNotFound,
+    OptionContractsNotFound,
     MultipleSymbolsFound,
     MultipleSymbolsFoundForFuzzySymbol,
     MultipleValuesFoundForField,
@@ -53,7 +54,7 @@ from zipline.errors import (
     SymbolNotFound,
 )
 from . import (
-    Asset, Equity, Future,
+    Asset, Equity, Future, Option
 )
 from . continuous_futures import (
     ADJUSTMENT_STYLES,
@@ -211,6 +212,7 @@ def _filter_kwargs(names, dict_):
 
 _filter_future_kwargs = _filter_kwargs(Future._kwargnames)
 _filter_equity_kwargs = _filter_kwargs(Equity._kwargnames)
+_filter_option_kwargs = _filter_kwargs(Option._kwargnames)
 
 
 def _convert_asset_timestamp_fields(dict_):
@@ -532,6 +534,9 @@ class AssetFinder(object):
         update_hits(
             self.retrieve_futures_contracts(type_to_assets.pop('future', ()))
         )
+        update_hits(
+            self.retrieve_options_contracts(type_to_assets.pop('future', ()))
+        )
 
         # We shouldn't know about any other asset types.
         if type_to_assets:
@@ -589,6 +594,29 @@ class AssetFinder(object):
             When any requested asset isn't found.
         """
         return self._retrieve_assets(sids, self.futures_contracts, Future)
+
+    def retrieve_options_contracts(self, sids):
+        """
+        Retrieve Option objects for an iterable of sids.
+
+        Users generally shouldn't need to this method (instead, they should
+        prefer the more general/friendly `retrieve_assets`), but it has a
+        documented interface and tests because it's used upstream.
+
+        Parameters
+        ----------
+        sids : iterable[int]
+
+        Returns
+        -------
+        equities : dict[int -> Equity]
+
+        Raises
+        ------
+        EquitiesNotFound
+            When any requested asset isn't found.
+        """
+        return self._retrieve_assets(sids, self.options_contracts, Option)
 
     @staticmethod
     def _select_assets_by_sid(asset_tbl, sids):
@@ -718,11 +746,21 @@ class AssetFinder(object):
         hits = {}
 
         querying_equities = issubclass(asset_type, Equity)
-        filter_kwargs = (
-            _filter_equity_kwargs
-            if querying_equities else
-            _filter_future_kwargs
-        )
+        querying_futures = issubclass(asset_type, Future)
+        querying_options = issubclass(asset_type, Option)
+        # filter_kwargs = (
+        #     _filter_equity_kwargs
+        #     if querying_equities else
+        #     _filter_future_kwargs
+        # )
+        if querying_equities:
+            filter_kwargs = _filter_equity_kwargs
+        elif querying_futures:
+            filter_kwargs = _filter_future_kwargs
+        elif querying_options:
+            filter_kwargs = _filter_option_kwargs
+        else:
+            raise ValueError("asset_type must be one of {'Equity', 'Future', 'Option'}")
 
         rows = self._retrieve_asset_dicts(sids, asset_tbl, querying_equities)
         for row in rows:
@@ -738,8 +776,10 @@ class AssetFinder(object):
         if misses:
             if querying_equities:
                 raise EquitiesNotFound(sids=misses)
-            else:
+            elif querying_futures:
                 raise FutureContractsNotFound(sids=misses)
+            else:
+                raise OptionContractsNotFound(sids=misses)
         return hits
 
     def _lookup_symbol_strict(self,
@@ -1107,6 +1147,34 @@ class AssetFinder(object):
             raise SymbolNotFound(symbol=symbol)
         return self.retrieve_asset(data['sid'])
 
+    def lookup_option_symbol(self, symbol):
+        """Lookup a option contract by symbol.
+
+        Parameters
+        ----------
+        symbol : str
+            The symbol of the desired contract.
+
+        Returns
+        -------
+        option : Option
+            The option contract referenced by ``symbol``.
+
+        Raises
+        ------
+        SymbolNotFound
+            Raised when no contract named 'symbol' is found.
+
+        """
+
+        data = self._select_asset_by_symbol(self.options_contracts, symbol)\
+                   .execute().fetchone()
+
+        # If no data found, raise an exception
+        if not data:
+            raise SymbolNotFound(symbol=symbol)
+        return self.retrieve_asset(data['sid'])
+
     def lookup_by_supplementary_field(self, field_name, value, as_of_date):
         try:
             owners = self.equity_supplementary_map[
@@ -1196,7 +1264,7 @@ class AssetFinder(object):
         raise NoValueForSid(field=field_name, sid=sid)
 
     def _get_contract_sids(self, root_symbol):
-        fc_cols = self.futures_contracts.c
+        fc_cols = self.futures_contracts.c + self.options_contracts.c
 
         return [r.sid for r in
                 list(sa.select((fc_cols.sid,)).where(
@@ -1205,7 +1273,7 @@ class AssetFinder(object):
                         fc_cols.sid).execute().fetchall())]
 
     def _get_root_symbol_exchange(self, root_symbol):
-        fc_cols = self.futures_root_symbols.c
+        fc_cols = self.root_symbols.c
 
         fields = (fc_cols.exchange,)
 
