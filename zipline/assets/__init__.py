@@ -17,6 +17,7 @@ from ._assets import (
     Asset,
     Equity,
     Future,
+    Option,
     make_asset_array,
 )
 from .assets import (
@@ -36,6 +37,7 @@ __all__ = [
     'ContinuousFuture',
     'Equity',
     'Future',
+    'Option',
     'AssetFinder',
     'AssetConvertible',
     'ExchangeInfo',

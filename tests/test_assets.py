@@ -40,6 +40,7 @@ from zipline.assets import (
     ExchangeInfo,
     Equity,
     Future,
+    Option,
     AssetDBWriter,
     AssetFinder,
 )
@@ -515,6 +516,103 @@ class TestFuture(WithAssetFinder, ZiplineTestCase):
 
         with self.assertRaises(SymbolNotFound):
             TestFuture.asset_finder.lookup_future_symbol('XXX99')
+
+
+# class TestOption(WithAssetFinder, ZiplineTestCase):
+#     @classmethod
+#     def make_futures_info(cls):
+#         return pd.DataFrame.from_dict(
+#             {
+#                 2468: {
+#                     'symbol': 'IBM200409C00106000',
+#                     'occ_symbol': 'IBM200409C00106000',
+#                     'root_symbol': 'IBM',
+#                     'asset_name': 'IBM Call Option',
+#                     'notice_date': pd.Timestamp('2014-01-20', tz='UTC'),
+#                     'expiration_date': pd.Timestamp('2014-02-20', tz='UTC'),
+#                     'auto_close_date': pd.Timestamp('2014-01-18', tz='UTC'),
+#                     'tick_size': 0.01,
+#                     'multiplier': 100.0,
+#                     'exchange': "TEST",
+#                 },
+#                 0: {
+#                     'symbol': 'IBM200409P00106000',
+#                     'occ_symbol': 'IBM200409P00106000',
+#                     'root_symbol': 'IBM',
+#                     'asset_name': 'IBM Put Option',
+#                     'start_date': pd.Timestamp('2005-12-01', tz='UTC'),
+#                     'notice_date': pd.Timestamp('2005-12-20', tz='UTC'),
+#                     'expiration_date': pd.Timestamp('2006-01-20', tz='UTC'),
+#                     'tick_size': 0.01,
+#                     'multiplier': 10.0,
+#                     'exchange': 'TEST',
+#                 },
+#             },
+#             orient='index',
+#         )
+#
+#     @classmethod
+#     def init_class_fixtures(cls):
+#         super(TestOption, cls).init_class_fixtures()
+#         cls.future = cls.asset_finder.lookup_future_symbol('IBM200409C00106000')
+#         cls.future2 = cls.asset_finder.lookup_future_symbol('IBM200409P00106000')
+#
+#     def test_repr(self):
+#         reprd = repr(self.future)
+#         self.assertEqual("Future(2468 [OMH15])", reprd)
+#
+#     def test_reduce(self):
+#         assert_equal(
+#             pickle.loads(pickle.dumps(self.future)).to_dict(),
+#             self.future.to_dict(),
+#         )
+#
+#     def test_to_and_from_dict(self):
+#         dictd = self.future.to_dict()
+#         for field in _futures_defaults.keys():
+#             self.assertTrue(field in dictd)
+#
+#         from_dict = Future.from_dict(dictd)
+#         self.assertTrue(isinstance(from_dict, Future))
+#         self.assertEqual(self.future, from_dict)
+#
+#     def test_root_symbol(self):
+#         self.assertEqual('OM', self.future.root_symbol)
+#
+#     def test_lookup_future_symbol(self):
+#         """
+#         Test the lookup_future_symbol method.
+#         """
+#         om = TestFuture.asset_finder.lookup_future_symbol('OMH15')
+#         self.assertEqual(om.sid, 2468)
+#         self.assertEqual(om.symbol, 'OMH15')
+#         self.assertEqual(om.root_symbol, 'OM')
+#         self.assertEqual(om.notice_date, pd.Timestamp('2014-01-20', tz='UTC'))
+#         self.assertEqual(om.expiration_date,
+#                          pd.Timestamp('2014-02-20', tz='UTC'))
+#         self.assertEqual(om.auto_close_date,
+#                          pd.Timestamp('2014-01-18', tz='UTC'))
+#
+#         cl = TestFuture.asset_finder.lookup_future_symbol('CLG06')
+#         self.assertEqual(cl.sid, 0)
+#         self.assertEqual(cl.symbol, 'CLG06')
+#         self.assertEqual(cl.root_symbol, 'CL')
+#         self.assertEqual(cl.start_date, pd.Timestamp('2005-12-01', tz='UTC'))
+#         self.assertEqual(cl.notice_date, pd.Timestamp('2005-12-20', tz='UTC'))
+#         self.assertEqual(cl.expiration_date,
+#                          pd.Timestamp('2006-01-20', tz='UTC'))
+#
+#         with self.assertRaises(SymbolNotFound):
+#             TestFuture.asset_finder.lookup_future_symbol('')
+#
+#         with self.assertRaises(SymbolNotFound):
+#             TestFuture.asset_finder.lookup_future_symbol('#&?!')
+#
+#         with self.assertRaises(SymbolNotFound):
+#             TestFuture.asset_finder.lookup_future_symbol('FOOBAR')
+#
+#         with self.assertRaises(SymbolNotFound):
+#             TestFuture.asset_finder.lookup_future_symbol('XXX99')
 
 
 class AssetFinderTestCase(WithTradingCalendars, ZiplineTestCase):

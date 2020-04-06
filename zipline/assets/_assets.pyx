@@ -402,6 +402,111 @@ cdef class Future(Asset):
         return super_dict
 
 
+@cython.embedsignature(False)
+cdef class Option(Asset):
+
+    _kwargnames = frozenset({
+        'sid',
+        'symbol',
+        'occ_symbol',
+        'root_symbol',
+        'asset_name',
+        'start_date',
+        'end_date',
+        'notice_date',
+        'expiration_date',
+        'auto_close_date',
+        'first_traded',
+        'exchange_info',
+        'tick_size',
+        'price_multiplier',
+    })
+
+    def __init__(self,
+                 int sid, # sid is required
+                 object exchange_info, # exchange is required
+                 object symbol="",
+                 object occ_symbol="",
+                 object root_symbol="",
+                 object asset_name="",
+                 object start_date=None,
+                 object end_date=None,
+                 object notice_date=None,
+                 object expiration_date=None,
+                 object auto_close_date=None,
+                 object first_traded=None,
+                 object tick_size=0.01,
+                 float multiplier=100.0):
+
+        super().__init__(
+            sid,
+            exchange_info,
+            symbol=symbol,
+            asset_name=asset_name,
+            start_date=start_date,
+            end_date=end_date,
+            first_traded=first_traded,
+            auto_close_date=auto_close_date,
+            tick_size=tick_size,
+            multiplier=multiplier
+        )
+        self.occ_symbol = occ_symbol
+        self.root_symbol = root_symbol
+        self.notice_date = notice_date
+        self.expiration_date = expiration_date
+
+        if auto_close_date is None:
+            if notice_date is None:
+                self.auto_close_date = expiration_date
+            elif expiration_date is None:
+                self.auto_close_date = notice_date
+            else:
+                self.auto_close_date = min(notice_date, expiration_date)
+
+    property multiplier:
+        """
+        DEPRECATION: This property should be deprecated and is only present for
+        backwards compatibility
+        """
+        def __get__(self):
+            warnings.warn("The multiplier property will soon be "
+            "retired. Please use the price_multiplier property instead.",
+            DeprecationWarning)
+            return self.price_multiplier
+
+    cpdef __reduce__(self):
+        """
+        Function used by pickle to determine how to serialize/deserialize this
+        class.  Should return a tuple whose first element is self.__class__,
+        and whose second element is a tuple of all the attributes that should
+        be serialized/deserialized during pickling.
+        """
+        return (self.__class__, (self.sid,
+                                 self.exchange_info,
+                                 self.symbol,
+                                 self.occ_symbol,
+                                 self.root_symbol,
+                                 self.asset_name,
+                                 self.start_date,
+                                 self.end_date,
+                                 self.notice_date,
+                                 self.expiration_date,
+                                 self.auto_close_date,
+                                 self.first_traded,
+                                 self.price_multiplier))
+
+    cpdef to_dict(self):
+        """
+        Convert to a python dict.
+        """
+        super_dict = super(Option, self).to_dict()
+        super_dict['occ_symbol'] = self.occ_symbol
+        super_dict['root_symbol'] = self.root_symbol
+        super_dict['notice_date'] = self.notice_date
+        super_dict['expiration_date'] = self.expiration_date
+        return super_dict
+
+
 def make_asset_array(int size, Asset asset):
     cdef np.ndarray out = np.empty([size], dtype=object)
     out.fill(asset)

@@ -31,3 +31,12 @@ cdef class Future(Asset):
 
     cpdef __reduce__(self)
     cpdef to_dict(self)
+
+cdef class Option(Asset):
+    cdef readonly object root_symbol
+    cdef readonly object occ_symbol
+    cdef readonly object notice_date
+    cdef readonly object expiration_date
+
+    cpdef __reduce__(self)
+    cpdef to_dict(self)
