@@ -30,6 +30,7 @@ from zipline.assets.asset_db_schema import (
     equity_symbol_mappings,
     equity_supplementary_mappings as equity_supplementary_mappings_table,
     futures_contracts as futures_contracts_table,
+    options_contracts as options_contracts_table,
     exchanges as exchanges_table,
     futures_root_symbols,
     metadata,
@@ -48,6 +49,8 @@ AssetData = namedtuple(
         'futures',
         'exchanges',
         'root_symbols',
+        'options',
+        'options_root_symbols',
         'equity_supplementary_mappings',
     ),
 )
@@ -74,6 +77,7 @@ _index_columns = {
 def _normalize_index_columns_in_place(equities,
                                       equity_supplementary_mappings,
                                       futures,
+                                      options,
                                       exchanges,
                                       root_symbols):
     """
@@ -89,6 +93,7 @@ def _normalize_index_columns_in_place(equities,
     for frame, column_name in ((equities, 'sid'),
                                (equity_supplementary_mappings, 'sid'),
                                (futures, 'sid'),
+                               (options, 'sid'),
                                (exchanges, 'exchange'),
                                (root_symbols, 'root_symbol')):
         if frame is not None and column_name in frame:
@@ -124,6 +129,22 @@ del _direct_equities_defaults['symbol']
 _futures_defaults = {
     'symbol': _default_none,
     'root_symbol': _default_none,
+    'asset_name': _default_none,
+    'start_date': lambda df, col: 0,
+    'end_date': lambda df, col: np.iinfo(np.int64).max,
+    'first_traded': _default_none,
+    'exchange': _default_none,
+    'notice_date': _default_none,
+    'expiration_date': _default_none,
+    'auto_close_date': _default_none,
+    'tick_size': _default_none,
+    'multiplier': lambda df, col: 1,
+}
+
+# Default values for the options DataFrame
+_options_defaults = {
+    'symbol': _default_none,
+    'occ_symbol': _default_none,
     'asset_name': _default_none,
     'start_date': lambda df, col: 0,
     'end_date': lambda df, col: np.iinfo(np.int64).max,
@@ -463,6 +484,7 @@ class AssetDBWriter(object):
                     equity_symbol_mappings,
                     equity_supplementary_mappings,
                     futures,
+                    options,
                     exchanges,
                     root_symbols,
                     chunk_size):
@@ -502,6 +524,14 @@ class AssetDBWriter(object):
                     chunk_size,
                 )
 
+            if options is not None:
+                self._write_assets(
+                    'option',
+                    futures,
+                    conn,
+                    chunk_size,
+                )
+
             if equities is not None:
                 self._write_assets(
                     'equity',
@@ -516,6 +546,7 @@ class AssetDBWriter(object):
                      equity_symbol_mappings=None,
                      equity_supplementary_mappings=None,
                      futures=None,
+                     options=None,
                      exchanges=None,
                      root_symbols=None,
                      chunk_size=DEFAULT_CHUNK_SIZE):
@@ -636,6 +667,9 @@ class AssetDBWriter(object):
         if futures is not None:
             futures = _generate_output_dataframe(_futures_defaults, futures)
 
+        if options is not None:
+            futures = _generate_output_dataframe(_options_defaults, options)
+
         if exchanges is not None:
             exchanges = _generate_output_dataframe(
                 exchanges.set_index('exchange'),
@@ -662,6 +696,7 @@ class AssetDBWriter(object):
             equity_symbol_mappings=equity_symbol_mappings,
             equity_supplementary_mappings=equity_supplementary_mappings,
             futures=futures,
+            options=options,
             exchanges=exchanges,
             root_symbols=root_symbols,
             chunk_size=chunk_size,
@@ -670,6 +705,7 @@ class AssetDBWriter(object):
     def write(self,
               equities=None,
               futures=None,
+              options=None,
               exchanges=None,
               root_symbols=None,
               equity_supplementary_mappings=None,
@@ -778,6 +814,7 @@ class AssetDBWriter(object):
         data = self._load_data(
             equities if equities is not None else pd.DataFrame(),
             futures if futures is not None else pd.DataFrame(),
+            options if options is not None else pd.DataFrame(),
             exchanges if exchanges is not None else pd.DataFrame(),
             root_symbols if root_symbols is not None else pd.DataFrame(),
             (
@@ -791,6 +828,7 @@ class AssetDBWriter(object):
             equity_symbol_mappings=data.equities_mappings,
             equity_supplementary_mappings=data.equity_supplementary_mappings,
             futures=data.futures,
+            options=data.options,
             root_symbols=data.root_symbols,
             exchanges=data.exchanges,
             chunk_size=chunk_size,
@@ -822,6 +860,11 @@ class AssetDBWriter(object):
             if mapping_data is not None:
                 raise TypeError('no mapping data expected for futures')
 
+        elif asset_type == 'option':
+            tbl = options_contracts_table
+            if mapping_data is not None:
+                raise TypeError('no mapping data expected for options')
+
         elif asset_type == 'equity':
             tbl = equities_table
             if mapping_data is None:
@@ -836,7 +879,7 @@ class AssetDBWriter(object):
 
         else:
             raise ValueError(
-                "asset_type must be in {'future', 'equity'}, got: %s" %
+                "asset_type must be in {'future', 'equity', 'option'}, got: %s" %
                 asset_type,
             )
 
@@ -956,6 +999,24 @@ class AssetDBWriter(object):
 
         return futures_output
 
+    def _normalize_options(self, options):
+        futures_output = _generate_output_dataframe(
+            data_subset=options,
+            defaults=_options_defaults,
+        )
+        for col in ('symbol', 'occ_symbol', 'root_symbol'):
+            futures_output[col] = futures_output[col].str.upper()
+
+        for col in ('start_date',
+                    'end_date',
+                    'first_traded',
+                    'notice_date',
+                    'expiration_date',
+                    'auto_close_date'):
+            futures_output[col] = _dt_to_epoch_ns(futures_output[col])
+
+        return futures_output
+
     def _normalize_equity_supplementary_mappings(self, mappings):
         mappings_output = _generate_output_dataframe(
             data_subset=mappings,
@@ -970,6 +1031,7 @@ class AssetDBWriter(object):
     def _load_data(self,
                    equities,
                    futures,
+                   options,
                    exchanges,
                    root_symbols,
                    equity_supplementary_mappings):
@@ -982,11 +1044,14 @@ class AssetDBWriter(object):
             equities=equities,
             equity_supplementary_mappings=equity_supplementary_mappings,
             futures=futures,
+            options=options,
             exchanges=exchanges,
             root_symbols=root_symbols,
         )
 
         futures_output = self._normalize_futures(futures)
+
+        options_output = self._normalize_options(options)
 
         equity_supplementary_mappings_output = (
             self._normalize_equity_supplementary_mappings(
@@ -1013,6 +1078,7 @@ class AssetDBWriter(object):
             equities=equities_output,
             equities_mappings=equities_mappings,
             futures=futures_output,
+            options=options_output,
             exchanges=exchanges_output,
             root_symbols=root_symbols_output,
             equity_supplementary_mappings=equity_supplementary_mappings_output,
