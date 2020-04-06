@@ -6,6 +6,8 @@ tmp/**/*
 tmp/*
 *.swp
 *~
+.venv/
+
 #mac autosaving file
 .DS_Store
 *.py[co]
@@ -40,6 +42,7 @@ develop-eggs
 coverage.xml
 htmlcov
 nosetests.xml
+src/
 
 # C Extensions
 *.o
