@@ -19,7 +19,6 @@ asset_db_table_names = frozenset({
     'exchanges',
     'root_symbols',
     'options_contracts',
-    'options_root_symbols',
     'version_info',
 })
 
@@ -179,29 +178,28 @@ options_contracts = sa.Table(
         nullable=False,
         primary_key=True
     ),
+    sa.Column('symbol', sa.Text, index=True),
+    sa.Column('occ_symbol', sa.Text, unique=True, index=True),
     sa.Column(
-        'symbol',
+        'root_symbol',
         sa.Text,
         sa.ForeignKey(root_symbols.c.root_symbol),
         index=True
     ),
-    sa.Column('occ_symbol', sa.Text, index=True),
-    sa.Column(
-        'root_symbol',
-        sa.String(length=255),
-        index=True
-    ),
+    sa.Column('asset_name', sa.Text),
     sa.Column('start_date', sa.Integer, default=0, nullable=False),
     sa.Column('end_date', sa.Integer, nullable=False),
     sa.Column('first_traded', sa.Integer),
     sa.Column(
         'exchange',
         sa.Text,
-        sa.ForeignKey('options_exchanges.exchange'),
+        sa.ForeignKey(exchanges.c.exchange),
     ),
-    sa.Column('notice_date', sa.Integer, nullable=False),
+    # sa.Column('notice_date', sa.Integer, nullable=False),
     sa.Column('expiration_date', sa.Integer, nullable=False),
     sa.Column('auto_close_date', sa.Integer, nullable=False),
+    sa.Column('option_type', sa.Text),
+    sa.Column('style', sa.Text),
     sa.Column('tick_size', sa.Float),
     sa.Column('multiplier', sa.Float)
 )

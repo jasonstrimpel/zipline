@@ -17,6 +17,8 @@ import os
 import pandas as pd
 import requests
 
+from . import loader
+
 
 def get_benchmark_returns(symbol):
     """
@@ -39,6 +41,12 @@ def get_benchmark_returns(symbol):
     r = requests.get(
         "https://cloud.iexapis.com/stable/stock/{}/chart/5y?token={}".format(symbol, api_key)
     )
+
+    if r.status_code != 200:
+        path = loader.get_data_filepath(loader.get_benchmark_filename(symbol))
+        df = pd.read_csv(path, names=["date", "return"])
+        df.index = pd.DatetimeIndex(df["date"], tz="UTC")
+        return df["return"]
 
     data = r.json()
 

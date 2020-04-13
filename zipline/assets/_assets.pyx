@@ -506,6 +506,12 @@ cdef class Option(Asset):
         super_dict['expiration_date'] = self.expiration_date
         return super_dict
 
+    def __repr__(self):
+        if self.occ_symbol:
+            return '%s(%d [%s])' % (type(self).__name__, self.sid, self.occ_symbol)
+        else:
+            return '%s(%d)' % (type(self).__name__, self.sid)
+
 
 def make_asset_array(int size, Asset asset):
     cdef np.ndarray out = np.empty([size], dtype=object)

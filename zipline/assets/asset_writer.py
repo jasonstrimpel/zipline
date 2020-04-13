@@ -50,7 +50,6 @@ AssetData = namedtuple(
         'exchanges',
         'root_symbols',
         'options',
-        'options_root_symbols',
         'equity_supplementary_mappings',
     ),
 )
@@ -145,14 +144,15 @@ _futures_defaults = {
 _options_defaults = {
     'symbol': _default_none,
     'occ_symbol': _default_none,
-    'asset_name': _default_none,
+    'root_symbol': _default_none,
     'start_date': lambda df, col: 0,
     'end_date': lambda df, col: np.iinfo(np.int64).max,
     'first_traded': _default_none,
     'exchange': _default_none,
-    'notice_date': _default_none,
     'expiration_date': _default_none,
     'auto_close_date': _default_none,
+    'option_type': _default_none,
+    'style': _default_none,
     'tick_size': _default_none,
     'multiplier': lambda df, col: 1,
 }
@@ -527,7 +527,7 @@ class AssetDBWriter(object):
             if options is not None:
                 self._write_assets(
                     'option',
-                    futures,
+                    options,
                     conn,
                     chunk_size,
                 )
@@ -803,7 +803,7 @@ class AssetDBWriter(object):
         if exchanges is None:
             exchange_names = [
                 df['exchange']
-                for df in (equities, futures, root_symbols)
+                for df in (equities, futures, options, root_symbols)
                 if df is not None
             ]
             if exchange_names:
@@ -1000,22 +1000,21 @@ class AssetDBWriter(object):
         return futures_output
 
     def _normalize_options(self, options):
-        futures_output = _generate_output_dataframe(
+        options_output = _generate_output_dataframe(
             data_subset=options,
             defaults=_options_defaults,
         )
         for col in ('symbol', 'occ_symbol', 'root_symbol'):
-            futures_output[col] = futures_output[col].str.upper()
+            options_output[col] = options_output[col].str.upper()
 
         for col in ('start_date',
                     'end_date',
                     'first_traded',
-                    'notice_date',
                     'expiration_date',
                     'auto_close_date'):
-            futures_output[col] = _dt_to_epoch_ns(futures_output[col])
+            options_output[col] = _dt_to_epoch_ns(options_output[col])
 
-        return futures_output
+        return options_output
 
     def _normalize_equity_supplementary_mappings(self, mappings):
         mappings_output = _generate_output_dataframe(

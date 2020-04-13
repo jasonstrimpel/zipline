@@ -306,7 +306,27 @@ class HistoryLoader(with_metaclass(ABCMeta)):
     adjustment_reader : SQLiteAdjustmentReader
         Reader for adjustment data.
     """
-    FIELDS = ('open', 'high', 'low', 'close', 'volume', 'sid')
+    FIELDS = (
+        "open",
+        "high",
+        "low",
+        "close",
+        "volume",
+        "price",
+        "contract",
+        "sid",
+        "last_traded",
+        "adjusted_underlying_close",
+        "strike_price",
+        "ask",
+        "bid",
+        "mid",
+        "spread",
+        "moneyness",
+        "unadjusted_underlying_close",
+        "open_interest",  # not in PSBA
+        "days_to_expiration",  # not in PSBA
+    )
 
     def __init__(self, trading_calendar, reader, equity_adjustment_reader,
                  asset_finder,

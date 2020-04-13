@@ -1,0 +1,6 @@
+{
+  "src/blaze/blaze/compute/tests/test_comprehensive.py": true,
+  "src/blaze/blaze/compute/tests/test_core_compute.py": true,
+  "src/blaze/blaze/compute/tests/test_literal_compute.py": true,
+  "tests/test_assets.py": true
+}

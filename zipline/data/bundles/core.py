@@ -13,6 +13,7 @@ from toolz import curry, complement, take
 
 from ..adjustments import SQLiteAdjustmentReader, SQLiteAdjustmentWriter
 from ..bcolz_daily_bars import BcolzDailyBarReader, BcolzDailyBarWriter
+from ..bcolz_daily_chains import BcolzDailyChainWriter
 from ..minute_bars import (
     BcolzMinuteBarReader,
     BcolzMinuteBarWriter,
@@ -79,6 +80,10 @@ def daily_equity_relative(bundle_name, timestr, environ=None):
     return bundle_name, timestr, 'daily_equities.bcolz'
 
 
+def daily_options_relative(bundle_name, timestr, environ=None):
+    return bundle_name, timestr, 'daily_options.bcolz'
+
+
 def minute_equity_relative(bundle_name, timestr, environ=None):
     return bundle_name, timestr, 'minute_equities.bcolz'
 
@@ -129,6 +134,46 @@ def ingestions_for_bundle(bundle, environ=None):
          if not pth.hidden(ing)),
         reverse=True,
     )
+
+
+def most_recent_data(bundle_name, timestamp, environ=None):
+    """Get the path to the most recent data after ``date``for the
+    given bundle.
+
+    Parameters
+    ----------
+    bundle_name : str
+        The name of the bundle to lookup.
+    timestamp : datetime
+        The timestamp to begin searching on or before.
+    environ : dict, optional
+        An environment dict to forward to zipline_root.
+    """
+    if bundle_name not in bundles:
+        raise UnknownBundle(bundle_name)
+
+    try:
+        candidates = os.listdir(
+            pth.data_path([bundle_name], environ=environ),
+        )
+        return pth.data_path(
+            [bundle_name,
+             max(
+                 filter(complement(pth.hidden), candidates),
+                 key=from_bundle_ingest_dirname,
+             )],
+            environ=environ,
+        )
+    except (ValueError, OSError) as e:
+        if getattr(e, 'errno', errno.ENOENT) != errno.ENOENT:
+            raise
+        raise ValueError(
+            'no data for bundle {bundle!r} on or before {timestamp}\n'
+            'maybe you need to run: $ zipline ingest -b {bundle}'.format(
+                bundle=bundle_name,
+                timestamp=timestamp,
+            ),
+        )
 
 
 RegisteredBundle = namedtuple(
@@ -392,18 +437,31 @@ def _make_bundle_core():
                         name, timestr, environ=environ,
                     )
                 )
+                daily_options_path = wd.ensure_dir(
+                    *daily_options_relative(
+                        name, timestr, environ=environ
+                    )
+                )
+
                 daily_bar_writer = BcolzDailyBarWriter(
                     daily_bars_path,
                     calendar,
                     start_session,
                     end_session,
                 )
+                daily_chain_writer = BcolzDailyChainWriter(
+                    daily_options_path,
+                    calendar,
+                    start_session,
+                    end_session
+                )
                 # Do an empty write to ensure that the daily ctables exist
                 # when we create the SQLiteAdjustmentWriter below. The
                 # SQLiteAdjustmentWriter needs to open the daily ctables so
                 # that it can compute the adjustment ratios for the dividends.
-
                 daily_bar_writer.write(())
+                daily_chain_writer.write(())
+
                 minute_bar_writer = BcolzMinuteBarWriter(
                     wd.ensure_dir(*minute_equity_relative(
                         name, timestr, environ=environ)
@@ -428,6 +486,7 @@ def _make_bundle_core():
                 )
             else:
                 daily_bar_writer = None
+                daily_chain_writer = None
                 minute_bar_writer = None
                 asset_db_writer = None
                 adjustment_db_writer = None
@@ -441,6 +500,7 @@ def _make_bundle_core():
                 asset_db_writer,
                 minute_bar_writer,
                 daily_bar_writer,
+                daily_chain_writer,
                 adjustment_db_writer,
                 calendar,
                 start_session,
@@ -457,45 +517,6 @@ def _make_bundle_core():
                 with working_file(version_path) as wf:
                     shutil.copy2(assets_db_path, wf.path)
                     downgrade(wf.path, version)
-
-    def most_recent_data(bundle_name, timestamp, environ=None):
-        """Get the path to the most recent data after ``date``for the
-        given bundle.
-
-        Parameters
-        ----------
-        bundle_name : str
-            The name of the bundle to lookup.
-        timestamp : datetime
-            The timestamp to begin searching on or before.
-        environ : dict, optional
-            An environment dict to forward to zipline_root.
-        """
-        if bundle_name not in bundles:
-            raise UnknownBundle(bundle_name)
-
-        try:
-            candidates = os.listdir(
-                pth.data_path([bundle_name], environ=environ),
-            )
-            return pth.data_path(
-                [bundle_name,
-                 max(
-                     filter(complement(pth.hidden), candidates),
-                     key=from_bundle_ingest_dirname,
-                 )],
-                environ=environ,
-            )
-        except (ValueError, OSError) as e:
-            if getattr(e, 'errno', errno.ENOENT) != errno.ENOENT:
-                raise
-            raise ValueError(
-                'no data for bundle {bundle!r} on or before {timestamp}\n'
-                'maybe you need to run: $ zipline ingest -b {bundle}'.format(
-                    bundle=bundle_name,
-                    timestamp=timestamp,
-                ),
-            )
 
     def load(name, environ=os.environ, timestamp=None):
         """Loads a previously ingested bundle.

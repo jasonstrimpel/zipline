@@ -20,14 +20,17 @@ from six.moves.urllib_error import HTTPError
 from trading_calendars import get_calendar
 
 from .benchmarks import get_benchmark_returns
-from ..utils.paths import (
-    cache_root,
-    data_root,
-)
+from . import treasuries
+from ..utils.paths import cache_root, data_root
 
 
-logger = logbook.Logger('Loader')
+logger = logbook.Logger("Loader")
 
+# Mapping from index symbol to appropriate bond data
+INDEX_MAPPING = {
+    "SPY": (treasuries, "treasury_curves.csv", "www.federalreserve.gov"),
+    "^FTSE": (treasuries, "treasury_curves.csv", "www.federalreserve.gov"),
+}
 ONE_HOUR = pd.Timedelta(hours=1)
 
 
@@ -35,7 +38,7 @@ def last_modified_time(path):
     """
     Get the last modified time of path as a Timestamp.
     """
-    return pd.Timestamp(os.path.getmtime(path), unit='s', tz='UTC')
+    return pd.Timestamp(os.path.getmtime(path), unit="s", tz="UTC")
 
 
 def get_data_filepath(name, environ=None):
@@ -76,10 +79,9 @@ def has_data_for_dates(series_or_df, first_date, last_date):
     return (first <= first_date) and (last >= last_date)
 
 
-def load_benchmark_data(trading_day=None,
-                        trading_days=None,
-                        bm_symbol='SPY',
-                        environ=None):
+def load_market_data(
+    trading_day=None, trading_days=None, bm_symbol="SPY", environ=None
+):
     """
     Load benchmark returns for the given calendar and benchmark symbol.
 
@@ -101,23 +103,27 @@ def load_benchmark_data(trading_day=None,
 
     Returns
     -------
-    benchmark_returns : pd.Series
+    (benchmark_returns, treasury_curves) : (pd.Series, pd.DataFrame)
 
     Notes
     -----
     Return values are DatetimeIndexed with values dated to midnight in UTC of
-    each stored date.
+    each stored date. The columns of `treasury_curves` are:
+
+    '1month', '3month', '6month',
+    '1year','2year','3year','5year','7year','10year','20year','30year'
+
     """
     if trading_day is None:
-        trading_day = get_calendar('XNYS').day
+        trading_day = get_calendar("XNYS").day
     if trading_days is None:
-        trading_days = get_calendar('XNYS').all_sessions
+        trading_days = get_calendar("XNYS").all_sessions
 
     first_date = trading_days[0]
     now = pd.Timestamp.utcnow()
 
     # we will fill missing benchmark data through latest trading date
-    last_date = trading_days[trading_days.get_loc(now, method='ffill')]
+    last_date = trading_days[trading_days.get_loc(now, method="ffill")]
 
     br = ensure_benchmark_data(
         bm_symbol,
@@ -130,11 +136,23 @@ def load_benchmark_data(trading_day=None,
         environ,
     )
 
-    return br[br.index.slice_indexer(first_date, last_date)]
+    tc = ensure_treasury_data(bm_symbol, first_date, last_date, now, environ)
+
+    # combine dt indices with all trading days and reindex using ffill then bfill
+    # this _should_ be ok because the ffill and bfill dates are outside the range
+    # we're interested based on the incoming data bundle
+    all_dt = br.index.union(tc.index).reindex(trading_days)[0]
+    br = br.reindex(all_dt, method="ffill").fillna(method="bfill")
+    tc = tc.reindex(all_dt, method="ffill").fillna(method="bfill")
+
+    benchmark_returns = br[br.index.slice_indexer(first_date, last_date)]
+    treasury_curves = tc[tc.index.slice_indexer(first_date, last_date)]
+    return benchmark_returns, treasury_curves
 
 
-def ensure_benchmark_data(symbol, first_date, last_date, now, trading_day,
-                          environ=None):
+def ensure_benchmark_data(
+    symbol, first_date, last_date, now, trading_day, environ=None
+):
     """
     Ensure we have benchmark data for `symbol` from `first_date` to `last_date`
 
@@ -164,38 +182,125 @@ def ensure_benchmark_data(symbol, first_date, last_date, now, trading_day,
     path.
     """
     filename = get_benchmark_filename(symbol)
-    data = _load_cached_data(filename, first_date, last_date, now, environ)
+    data = _load_cached_data(filename, first_date, last_date, now, "benchmark", environ)
     if data is not None:
         return data
 
     # If no cached data was found or it was missing any dates then download the
     # necessary data.
     logger.info(
-        ('Downloading benchmark data for {symbol!r} '
-            'from {first_date} to {last_date}'),
+        (
+            "Downloading benchmark data for {symbol!r} "
+            "from {first_date} to {last_date}"
+        ),
         symbol=symbol,
         first_date=first_date - trading_day,
-        last_date=last_date
+        last_date=last_date,
     )
 
     try:
         data = get_benchmark_returns(symbol)
         data.to_csv(get_data_filepath(filename, environ))
     except (OSError, IOError, HTTPError):
-        logger.exception('Failed to cache the new benchmark returns')
+        logger.exception("Failed to cache the new benchmark returns")
         raise
     if not has_data_for_dates(data, first_date, last_date):
         logger.warn(
-            ("Still don't have expected benchmark data for {symbol!r} "
-                "from {first_date} to {last_date} after redownload!"),
+            (
+                "Still don't have expected benchmark data for {symbol!r} "
+                "from {first_date} to {last_date} after redownload!"
+            ),
             symbol=symbol,
             first_date=first_date - trading_day,
-            last_date=last_date
+            last_date=last_date,
         )
     return data
 
 
-def _load_cached_data(filename, first_date, last_date, now, environ=None):
+def ensure_treasury_data(symbol, first_date, last_date, now, environ=None):
+    """
+    Ensure we have treasury data from treasury module associated with symbol
+
+    Parameters
+    ----------
+    symbol : str
+        Benchmark symbol for which we're loading associated treasury curves.
+    first_date : pd.Timestamp
+        First date required to be in the cache.
+    last_date : pd.Timestamp
+        Last date required to be in the cache.
+    now : pd.Timestamp
+        The current time.  This is used to prevent repeated attempts to
+        re-download data that isn't available due to scheduling quirks or other
+        failures.
+
+    We attempt to download data unless we already have data stored in the cache
+    for `module_name` whose first entry is before or on `first_date` and whose
+    last entry is on or after `last_date`.
+
+    If we perform a download and the cache criteria are not satisfied, we wait
+    at least one hour before attempting a redownload.  This is determined by
+    comparing the current time to the result of os.path.getmtime on the cache
+    path.
+
+    """
+    loader_module, filename, source = INDEX_MAPPING.get(symbol, INDEX_MAPPING["SPY"])
+    first_date = max(first_date, loader_module.earliest_possible_date())
+
+    data = _load_cached_data(filename, first_date, last_date, now, "treasury", environ)
+    if data is not None:
+        return data
+
+    # If no cached data was found or it was missing any dates then download the
+    # necessary data.
+    logger.info(
+        (
+            "Downloading treasury data for {symbol!r} "
+            "from {first_date} to {last_date}"
+        ),
+        symbol=symbol,
+        first_date=first_date,
+        last_date=last_date,
+    )
+
+    try:
+        data = loader_module.get_treasury_data(first_date, last_date)
+        data.to_csv(get_data_filepath(filename, environ))
+    except (OSError, IOError, HTTPError):
+        logger.exception("failed to cache treasury data")
+    if not has_data_for_dates(data, first_date, last_date):
+        logger.warn(
+            (
+                "Still don't have expected treasury data for {symbol!r} "
+                "from {first_date} to {last_date} after redownload!"
+            ),
+            symbol=symbol,
+            first_date=first_date,
+            last_date=last_date,
+        )
+    return data
+
+
+def _load_cached_data(
+    filename, first_date, last_date, now, resource_name, environ=None
+):
+    if resource_name == "benchmark":
+
+        def from_csv(path):
+            return pd.read_csv(
+                path,
+                parse_dates=[0],
+                index_col=0,
+                header=None,
+                # Pass squeeze=True so that we get a series instead of a frame.
+                squeeze=True,
+            ).tz_localize("UTC")
+
+    else:
+
+        def from_csv(path):
+            return pd.read_csv(path, parse_dates=[0], index_col=0).tz_localize("UTC")
+
     # Path for the cache.
     path = get_data_filepath(filename, environ)
 
@@ -203,15 +308,7 @@ def _load_cached_data(filename, first_date, last_date, now, environ=None):
     # yet, so don't try to read from 'path'.
     if os.path.exists(path):
         try:
-            data = pd.read_csv(
-                path,
-                parse_dates=[0],
-                index_col=0,
-                header=None,
-                # Pass squeeze=True so that we get a series instead of a frame.
-                squeeze=True,
-            ).tz_localize('UTC')
-
+            data = from_csv(path)
             if has_data_for_dates(data, first_date, last_date):
                 return data
 
@@ -220,8 +317,9 @@ def _load_cached_data(filename, first_date, last_date, now, environ=None):
             last_download_time = last_modified_time(path)
             if (now - last_download_time) <= ONE_HOUR:
                 logger.warn(
-                    "Refusing to download new benchmark data because a "
+                    "Refusing to download new {resource} data because a "
                     "download succeeded at {time}.",
+                    resource=resource_name,
                     time=last_download_time,
                 )
                 return data
@@ -244,20 +342,19 @@ def _load_cached_data(filename, first_date, last_date, now, environ=None):
     return None
 
 
-def load_prices_from_csv(filepath, identifier_col, tz='UTC'):
+def load_prices_from_csv(filepath, identifier_col, tz="UTC"):
     data = pd.read_csv(filepath, index_col=identifier_col)
     data.index = pd.DatetimeIndex(data.index, tz=tz)
     data.sort_index(inplace=True)
     return data
 
 
-def load_prices_from_csv_folder(folderpath, identifier_col, tz='UTC'):
+def load_prices_from_csv_folder(folderpath, identifier_col, tz="UTC"):
     data = None
     for file in os.listdir(folderpath):
-        if '.csv' not in file:
+        if ".csv" not in file:
             continue
-        raw = load_prices_from_csv(os.path.join(folderpath, file),
-                                   identifier_col, tz)
+        raw = load_prices_from_csv(os.path.join(folderpath, file), identifier_col, tz)
         if data is None:
             data = raw
         else:

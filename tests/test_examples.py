@@ -61,9 +61,13 @@ class ExamplesTests(WithTmpDir, ZiplineTestCase):
             serialization='pickle',
         )
 
-        update_modified_time(
-            cls.tmpdir.getpath('example_data/root/data/SPY_benchmark.csv'),
-        )
+        market_data = ('SPY_benchmark.csv', 'treasury_curves.csv')
+        for data in market_data:
+            update_modified_time(
+                cls.tmpdir.getpath(
+                    'example_data/root/data/' + data
+                )
+            )
 
     @parameterized.expand(sorted(EXAMPLE_MODULES))
     def test_example(self, example_name):

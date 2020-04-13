@@ -408,6 +408,7 @@ class WithAssetFinder(WithDefaultDateBounds):
         return None
 
     make_futures_info = _make_info
+    make_options_info = _make_info
     make_exchanges_info = _make_info
     make_root_symbols_info = _make_info
     make_equity_supplementary_mappings = _make_info
