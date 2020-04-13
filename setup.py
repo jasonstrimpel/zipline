@@ -100,6 +100,7 @@ ext_modules = [
     window_specialization('label'),
     Extension('zipline.lib.rank', ['zipline/lib/rank.pyx']),
     Extension('zipline.data._equities', ['zipline/data/_equities.pyx']),
+    Extension('zipline.data._options', ['zipline/data/_options.pyx']),
     Extension('zipline.data._adjustments', ['zipline/data/_adjustments.pyx']),
     Extension('zipline._protocol', ['zipline/_protocol.pyx']),
     Extension(
