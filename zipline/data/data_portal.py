@@ -76,6 +76,8 @@ BASE_FIELDS = frozenset(
         "spread",
         "moneyness",
         "unadjusted_underlying_close",
+        'interest_rate',
+        'statistical_volatility',
         "open_interest",  # not in PSBA
         "days_to_expiration",  # not in PSBA
     ]
@@ -98,6 +100,8 @@ OHLCV_FIELDS = frozenset(
         "unadjusted_underlying_close",
         "open_interest",  # not in PSBA
         "days_to_expiration",  # not in PSBA
+        'interest_rate',
+        'statistical_volatility',
     ]
 )
 
@@ -119,6 +123,8 @@ OHLCVP_FIELDS = frozenset(
         "unadjusted_underlying_close",
         "open_interest",  # not in PSBA
         "days_to_expiration",  # not in PSBA
+        'interest_rate',
+        'statistical_volatility',
     ]
 )
 

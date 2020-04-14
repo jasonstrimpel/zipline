@@ -44,7 +44,9 @@ PSBA = frozenset([
     'mid',
     'spread',
     'moneyness',
-    'unadjusted_underlying_close'
+    'unadjusted_underlying_close',
+    'interest_rate',
+    'statistical_volatility'
 ])
 OPTION_PRICING_BCOLZ_COLUMNS = (
     'adjusted_underlying_close',
@@ -55,6 +57,8 @@ OPTION_PRICING_BCOLZ_COLUMNS = (
     'spread',
     'moneyness',
     'unadjusted_underlying_close',
+    'interest_rate',
+    'statistical_volatility',
     'volume',  # not in PSBA
     'open_interest',  # not in PSBA
     'days_to_expiration',  # not in PSBA
@@ -151,6 +155,8 @@ class BcolzDailyChainWriter(object):
         'volume': uint32_dtype,
         'open_interest': uint32_dtype,
         'unadjusted_underlying_close': float64_dtype,
+        'interest_rate': float64_dtype,
+        'statistical_volatility': float64_dtype
     }
 
     def __init__(self, filename, calendar, start_session, end_session):
