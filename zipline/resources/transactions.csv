@@ -1,0 +1,13 @@
+﻿AssetClass,Symbol,TradeDatetime,Quantity,TradePrice,Side,Commission
+stock,GE,3/1/18,10,11.39,buy,-1.5
+stock,GE,3/2/18,-10,11.5,sell,-1.5
+stock,BAC,3/1/18,10,29.09,buy,-1.5
+stock,BAC,3/2/18,-10,30.13,sell,-1.5
+stock,CNP,5/3/18,15,27.25,buy,-1.5
+stock,CNP,5/4/18,-15,26.96,sell,-1.5
+stock,FTV,3/5/18,5,75.99,buy,-1.5
+stock,FTV,3/5/18,-5,85.03,sell,-1.5
+stock,INTC,3/5/18,-5,45.7,sell,-1.5
+stock,INTC,3/6/18,5,44.33,buy,-1.5
+stock,ORCL,3/7/18,-20,51.63,sell,-1.5
+stock,ORCL,3/8/18,20,54.73,buy,-1.5

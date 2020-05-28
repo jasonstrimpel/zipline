@@ -1,32 +1,31 @@
 """
 Module for building a complete daily dataset from ivolatility's options data.
 """
-import os
 from io import BytesIO
 
-from click import progressbar
-from logbook import Logger
+import numpy as np
 import pandas as pd
 import requests
-from six.moves.urllib.parse import urlencode
+from click import progressbar
+from logbook import Logger
 from six import iteritems
+from six.moves.urllib.parse import urlencode
 from sqlalchemy import create_engine
 
-from . import core as bundles
-import numpy as np
-
+from zipline.assets import AssetFinder
+from zipline.data.bcolz_daily_bars import BcolzDailyBarReader
 from zipline.data.bundles.core import most_recent_data
+from zipline.data.data_portal import DataPortal
 from zipline.data.loader import load_market_data
 from zipline.data.treasuries import get_interpolated_rate
+from zipline.finance import valuation
+from . import core as bundles
 
-from zipline.assets import AssetFinder
-from zipline.data.data_portal import DataPortal
-from zipline.data.bcolz_daily_bars import BcolzDailyBarReader
 
 log = Logger(__name__)
 
 ONE_MEGABYTE = 1024 * 1024
-IVOLATILITY_DATA_URL = "https://www.dropbox.com/s/g4ijn1ox1dfswej/ibm.csv?"
+IVOLATILITY_DATA_URL = "https://www.dropbox.com/s/rim7neyn5sdzno9/ibm.large.csv?"
 
 QUANDL_PATH = most_recent_data("quandl", pd.Timestamp("now"))
 
@@ -196,6 +195,9 @@ def _get_price_metadata(data, show_progress):
     data["mid"] = (ask + bid) / 2.0
     data["spread"] = ask - bid
 
+    # create the close price because it's used everywhere
+    data["close"] = data.mid
+
     data["moneyness"] = np.nan
 
     calls = data[data.option_type == "C"]
@@ -265,11 +267,175 @@ def _gen_annualized_volatility(data, calendar, show_progress):
     return data
 
 
+def _valuation_models(option_type, style):
+    option_type = "call" if option_type.upper() == "C" else "put"
+    model = (
+        f"binomial_american_{option_type}_value"
+        if style.upper() == "A"
+        else f"black_scholes_{option_type}_value"
+    )
+    return getattr(valuation, model)
+
+
+def _greeks_models(option_type, style):
+    option_type = "call" if option_type.upper() == "C" else "put"
+    delta = (
+        f"binomial_american_{option_type}_delta"
+        if style.upper() == "A"
+        else f"black_scholes_{option_type}_delta"
+    )
+    gamma = (
+        f"binomial_american_{option_type}_gamma"
+        if style.upper() == "A"
+        else f"black_scholes_{option_type}_gamma"
+    )
+    vega = (
+        f"binomial_american_{option_type}_vega"
+        if style.upper() == "A"
+        else f"black_scholes_{option_type}_vega"
+    )
+    theta = (
+        f"binomial_american_{option_type}_theta"
+        if style.upper() == "A"
+        else f"black_scholes_{option_type}_theta"
+    )
+    rho = (
+        f"binomial_american_{option_type}_rho"
+        if style.upper() == "A"
+        else f"black_scholes_{option_type}_rho"
+    )
+    return {
+        "delta": getattr(valuation, delta),
+        "gamma": getattr(valuation, gamma),
+        "vega": getattr(valuation, vega),
+        "theta": getattr(valuation, theta),
+        "rho": getattr(valuation, rho),
+    }
+
+
+def _implied_volatility_models(option_type, style):
+    option_type = "call" if option_type.upper() == "C" else "put"
+    model = (
+        f"binomial_american_{option_type}_implied_volatility_brent"
+        if style.upper() == "A"
+        else f"black_scholes_{option_type}_implied_volatility_brent"
+    )
+    return getattr(valuation, model)
+
+
+def _gen_option_valuation(data, calendar, show_progress):
+    if show_progress:
+        log.info("Generating option valuation.")
+
+    asset_finder = AssetFinder(
+        create_engine(f"sqlite:///{QUANDL_PATH}/assets-7.sqlite")
+    )
+    first_trading_day = pd.Timestamp(data.date.min(), tz="UTC")
+    data_portal = DataPortal(
+        asset_finder=asset_finder,
+        equity_daily_reader=BcolzDailyBarReader(f"{QUANDL_PATH}/daily_equities.bcolz"),
+        trading_calendar=calendar,
+        first_trading_day=first_trading_day,
+    )
+
+    val_fcn_v = np.vectorize(_valuation_models)
+    greek_fcn_v = np.vectorize(_greeks_models)
+
+    for name, group in data.groupby(["root_symbol", "date"]):
+        root_symbol, date = name
+        equity = asset_finder.lookup_symbol(
+            root_symbol, as_of_date=pd.Timestamp(date, tz="UTC")
+        )
+        s_ = data_portal.get_spot_value(
+            equity, "close", pd.Timestamp(date, tz="UTC"), "daily"
+        )
+
+        val_fcns = val_fcn_v(group.option_type.values, group["style"].values)
+        greek_fcns = greek_fcn_v(group.option_type.values, group["style"].values)
+
+        k = group.strike_price.values
+        s = np.full(k.shape, s_)
+        r = group.interest_rate.values
+        t = group.days_to_expiration.astype("timedelta64[D]").values / 365.0
+        vol = group.statistical_volatility.values
+
+        data.loc[group.index, "option_value"] = [
+            fn(s_, k_, r_, t_, vol_)
+            for fn, s_, k_, r_, t_, vol_ in zip(val_fcns, s, k, r, t, vol)
+        ]
+        data.loc[group.index, "delta"] = [
+            fn["delta"](s_, k_, r_, t_, vol_)
+            for fn, s_, k_, r_, t_, vol_ in zip(greek_fcns, s, k, r, t, vol)
+        ]
+        data.loc[group.index, "gamma"] = [
+            fn["gamma"](s_, k_, r_, t_, vol_)
+            for fn, s_, k_, r_, t_, vol_ in zip(greek_fcns, s, k, r, t, vol)
+        ]
+        data.loc[group.index, "vega"] = [
+            fn["vega"](s_, k_, r_, t_, vol_)
+            for fn, s_, k_, r_, t_, vol_ in zip(greek_fcns, s, k, r, t, vol)
+        ]
+        data.loc[group.index, "theta"] = [
+            fn["theta"](s_, k_, r_, t_, vol_)
+            for fn, s_, k_, r_, t_, vol_ in zip(greek_fcns, s, k, r, t, vol)
+        ]
+        data.loc[group.index, "rho"] = [
+            fn["rho"](s_, k_, r_, t_, vol_)
+            for fn, s_, k_, r_, t_, vol_ in zip(greek_fcns, s, k, r, t, vol)
+        ]
+
+    return data
+
+
+def _gen_implied_volatility(data, calendar, show_progress):
+    if show_progress:
+        log.info("Generating option implied volatility.")
+
+    asset_finder = AssetFinder(
+        create_engine(f"sqlite:///{QUANDL_PATH}/assets-7.sqlite")
+    )
+    first_trading_day = pd.Timestamp(data.date.min(), tz="UTC")
+    data_portal = DataPortal(
+        asset_finder=asset_finder,
+        equity_daily_reader=BcolzDailyBarReader(f"{QUANDL_PATH}/daily_equities.bcolz"),
+        trading_calendar=calendar,
+        first_trading_day=first_trading_day,
+    )
+
+    iv_fcn_v = np.vectorize(_implied_volatility_models)
+
+    for name, group in data.groupby(["root_symbol", "date"]):
+        root_symbol, date = name
+        equity = asset_finder.lookup_symbol(
+            root_symbol, as_of_date=pd.Timestamp(date, tz="UTC")
+        )
+        s_ = data_portal.get_spot_value(
+            equity, "close", pd.Timestamp(date, tz="UTC"), "daily"
+        )
+
+        iv_fcns = iv_fcn_v(group.option_type.values, group["style"].values)
+
+        k = group.strike_price.values
+        s = np.full(k.shape, s_)
+        r = group.interest_rate.values
+        t = group.days_to_expiration.astype("timedelta64[D]").values / 365.0
+        mid_price = group.mid.values
+
+        data.loc[group.index, "implied_volatility"] = [
+            fn(s_, k_, r_, t_, mid_price_)
+            for fn, s_, k_, r_, t_, mid_price_ in zip(iv_fcns, s, k, r, t, mid_price)
+        ]
+
+    return data
+
+
 def gen_valuation_metadata(data, treasury_curves, calendar, show_progress):
     data = _gen_symbols(data, show_progress)
     data = _get_price_metadata(data, show_progress)
     data = _gen_interest_rates(data, treasury_curves, show_progress)
     data = _gen_annualized_volatility(data, calendar, show_progress)
+    data = _gen_option_valuation(data, calendar, show_progress)
+    data = _gen_implied_volatility(data, calendar, show_progress)
 
     return data
 
@@ -282,11 +448,7 @@ def parse_pricing_and_vol(data, sessions, symbol_map):
         yield asset_id, asset_data
 
 
-@bundles.register(
-    "ivolatility",
-    start_session=pd.Timestamp("2005-01-03", tz="UTC"),
-    end_session=pd.Timestamp("2010-12-31", tz="UTC"),
-)
+@bundles.register("ivolatility")
 def ivolatility_bundle(
     environ,
     asset_db_writer,
@@ -329,6 +491,7 @@ def ivolatility_bundle(
     sessions = calendar.sessions_in_range(start_session, end_session)
 
     raw_data.set_index(["date", "occ_symbol"], inplace=True)
+
     daily_chain_writer.write(
         parse_pricing_and_vol(raw_data, sessions, symbol_map),
         show_progress=show_progress,

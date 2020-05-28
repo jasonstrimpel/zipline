@@ -152,6 +152,7 @@ def _run(handle_data,
         first_trading_day=first_trading_day,
         equity_minute_reader=bundle_data.equity_minute_bar_reader,
         equity_daily_reader=bundle_data.equity_daily_bar_reader,
+        option_daily_reader=bundle_data.option_daily_chain_reader,
         adjustment_reader=bundle_data.adjustment_reader,
     )
 

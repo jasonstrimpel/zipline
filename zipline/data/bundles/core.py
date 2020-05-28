@@ -13,7 +13,7 @@ from toolz import curry, complement, take
 
 from ..adjustments import SQLiteAdjustmentReader, SQLiteAdjustmentWriter
 from ..bcolz_daily_bars import BcolzDailyBarReader, BcolzDailyBarWriter
-from ..bcolz_daily_chains import BcolzDailyChainWriter
+from ..bcolz_daily_chains import BcolzDailyChainWriter, BcolzDailyChainReader
 from ..minute_bars import (
     BcolzMinuteBarReader,
     BcolzMinuteBarWriter,
@@ -50,6 +50,13 @@ def minute_equity_path(bundle_name, timestr, environ=None):
 def daily_equity_path(bundle_name, timestr, environ=None):
     return pth.data_path(
         daily_equity_relative(bundle_name, timestr, environ),
+        environ=environ,
+    )
+
+
+def daily_options_path(bundle_name, timestr, environ=None):
+    return pth.data_path(
+        daily_options_relative(bundle_name, timestr, environ),
         environ=environ,
     )
 
@@ -188,8 +195,11 @@ RegisteredBundle = namedtuple(
 
 BundleData = namedtuple(
     'BundleData',
-    'asset_finder equity_minute_bar_reader equity_daily_bar_reader '
-    'adjustment_reader',
+    ['asset_finder',
+    'equity_minute_bar_reader',
+    'equity_daily_bar_reader',
+    'option_daily_chain_reader',
+    'adjustment_reader']
 )
 
 BundleCore = namedtuple(
@@ -437,7 +447,7 @@ def _make_bundle_core():
                         name, timestr, environ=environ,
                     )
                 )
-                daily_options_path = wd.ensure_dir(
+                daily_chains_path = wd.ensure_dir(
                     *daily_options_relative(
                         name, timestr, environ=environ
                     )
@@ -450,7 +460,7 @@ def _make_bundle_core():
                     end_session,
                 )
                 daily_chain_writer = BcolzDailyChainWriter(
-                    daily_options_path,
+                    daily_chains_path,
                     calendar,
                     start_session,
                     end_session
@@ -548,6 +558,9 @@ def _make_bundle_core():
             ),
             equity_daily_bar_reader=BcolzDailyBarReader(
                 daily_equity_path(name, timestr, environ=environ),
+            ),
+            option_daily_chain_reader=BcolzDailyChainReader(
+                daily_options_path(name, timestr, environ)
             ),
             adjustment_reader=SQLiteAdjustmentReader(
                 adjustment_db_path(name, timestr, environ=environ),

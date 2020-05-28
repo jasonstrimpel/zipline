@@ -22,6 +22,7 @@ from numpy import (
 )
 from six import iteritems, with_metaclass
 
+from zipline.assets import Option
 from zipline.utils.memoize import lazyval
 
 
@@ -95,6 +96,11 @@ class AssetDispatchBarReader(with_metaclass(ABCMeta)):
         asset = self._asset_finder.retrieve_asset(sid)
         r = self._readers[type(asset)]
         return r.get_value(asset, dt, field)
+
+    def get_chain(self, options, dt):
+        # we hard code because only Option requires this method
+        r = self._readers[Option]
+        return r.get_chain(options, dt)
 
     def get_last_traded_dt(self, asset, dt):
         r = self._readers[type(asset)]

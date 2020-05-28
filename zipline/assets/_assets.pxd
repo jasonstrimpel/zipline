@@ -37,6 +37,8 @@ cdef class Option(Asset):
     cdef readonly object occ_symbol
     cdef readonly object notice_date
     cdef readonly object expiration_date
+    cdef readonly object option_type
+    cdef readonly object style
 
     cpdef __reduce__(self)
     cpdef to_dict(self)

@@ -418,6 +418,8 @@ cdef class Option(Asset):
         'auto_close_date',
         'first_traded',
         'exchange_info',
+        'option_type',
+        'style',
         'tick_size',
         'price_multiplier',
     })
@@ -435,6 +437,8 @@ cdef class Option(Asset):
                  object expiration_date=None,
                  object auto_close_date=None,
                  object first_traded=None,
+                 object option_type="",
+                 object style="",
                  object tick_size=0.01,
                  float multiplier=100.0):
 
@@ -454,6 +458,8 @@ cdef class Option(Asset):
         self.root_symbol = root_symbol
         self.notice_date = notice_date
         self.expiration_date = expiration_date
+        self.option_type = option_type
+        self.style = style
 
         if auto_close_date is None:
             if notice_date is None:
@@ -493,7 +499,9 @@ cdef class Option(Asset):
                                  self.expiration_date,
                                  self.auto_close_date,
                                  self.first_traded,
-                                 self.price_multiplier))
+                                 self.price_multiplier,
+                                 self.option_type,
+                                 self.style))
 
     cpdef to_dict(self):
         """
@@ -504,6 +512,8 @@ cdef class Option(Asset):
         super_dict['root_symbol'] = self.root_symbol
         super_dict['notice_date'] = self.notice_date
         super_dict['expiration_date'] = self.expiration_date
+        super_dict['option_type'] = self.option_type
+        super_dict['style'] = self.style
         return super_dict
 
     def __repr__(self):

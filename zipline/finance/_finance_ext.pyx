@@ -8,7 +8,7 @@ import pandas as pd
 from six import itervalues
 
 from zipline._protocol cimport InnerPosition
-from zipline.assets._assets cimport Future
+from zipline.assets._assets cimport Future, Option
 
 
 cpdef update_position_last_sale_prices(positions, get_price, dt):
@@ -208,6 +208,12 @@ cpdef calculate_position_tracker_stats(positions, PositionStats stats):
 
             # unchecked cast, this is safe because we do a type check above
             exposure *= position.asset.price_multiplier
+        elif type(position.asset) is Option:
+
+            # unchecked cast, this is safe because we do a type check above
+            exposure *= position.asset.price_multiplier
+
+            value = exposure
         else:
             value = exposure
 

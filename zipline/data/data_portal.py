@@ -76,8 +76,15 @@ BASE_FIELDS = frozenset(
         "spread",
         "moneyness",
         "unadjusted_underlying_close",
-        'interest_rate',
-        'statistical_volatility',
+        "interest_rate",
+        "implied_volatility",
+        "statistical_volatility",
+        "option_value",
+        "delta",
+        "gamma",
+        "vega",
+        "theta",
+        "rho",
         "open_interest",  # not in PSBA
         "days_to_expiration",  # not in PSBA
     ]
@@ -100,8 +107,15 @@ OHLCV_FIELDS = frozenset(
         "unadjusted_underlying_close",
         "open_interest",  # not in PSBA
         "days_to_expiration",  # not in PSBA
-        'interest_rate',
-        'statistical_volatility',
+        "interest_rate",
+        "implied_volatility",
+        "statistical_volatility",
+        "option_value",
+        "delta",
+        "gamma",
+        "vega",
+        "theta",
+        "rho",
     ]
 )
 
@@ -123,9 +137,41 @@ OHLCVP_FIELDS = frozenset(
         "unadjusted_underlying_close",
         "open_interest",  # not in PSBA
         "days_to_expiration",  # not in PSBA
-        'interest_rate',
-        'statistical_volatility',
+        "interest_rate",
+        "implied_volatility",
+        "statistical_volatility",
+        "option_value",
+        "delta",
+        "gamma",
+        "vega",
+        "theta",
+        "rho",
     ]
+)
+
+OPTION_PRICING_BCOLZ_COLUMNS = (
+    "adjusted_underlying_close",
+    "ask",
+    "bid",
+    "close",
+    "delta",
+    "gamma",
+    "interest_rate",
+    "implied_volatility",
+    "mid",
+    "moneyness",
+    "option_value",
+    "rho",
+    "spread",
+    "statistical_volatility",
+    "strike_price",
+    "theta",
+    "unadjusted_underlying_close",
+    "vega",
+    # fields not explicity in the PRICING or GREEKS sets
+    "open_interest",
+    "volume",
+    "days_to_expiration",
 )
 
 HISTORY_FREQUENCIES = set(["1m", "1d"])
@@ -1394,6 +1440,49 @@ class DataPortal(object):
         if contract_sid is None:
             return None
         return self.asset_finder.retrieve_asset(contract_sid)
+
+    def get_option_chain(self, root_symbol, dt):
+        """
+        Public API method that returns a scalar value representing the value
+        of the desired asset's field at either the given dt.
+
+        Parameters
+        ----------
+        assets : Asset, ContinuousFuture, or iterable of same.
+            The asset or assets whose data is desired.
+        field : {'open', 'high', 'low', 'close', 'volume',
+                 'price', 'last_traded'}
+            The desired field of the asset.
+        dt : pd.Timestamp
+            The timestamp for the desired value.
+        data_frequency : str
+            The frequency of the data to query; i.e. whether the data is
+            'daily' or 'minute' bars
+
+        Returns
+        -------
+        value : float, int, or pd.Timestamp
+            The spot value of ``field`` for ``asset`` The return type is based
+            on the ``field`` requested. If the field is one of 'open', 'high',
+            'low', 'close', or 'price', the value will be a float. If the
+            ``field`` is 'volume' the value will be a int. If the ``field`` is
+            'last_traded' the value will be a Timestamp.
+        """
+        reader = self._get_pricing_reader("daily")
+        options = self.asset_finder.get_chain_contracts(root_symbol)
+        chain = reader.get_chain(options, dt)
+
+        sids = chain.sid.values
+
+        sid_to_option_types = {o.sid: o.option_type for o in options if o.sid in sids}
+        chain["option_type"] = chain.sid.replace(sid_to_option_types)
+
+        sid_to_expiration_dates = {
+            o.sid: o.expiration_date for o in options if o.sid in sids
+        }
+        chain["expiration_date"] = chain.sid.replace(sid_to_expiration_dates)
+
+        return chain
 
     @property
     def adjustment_reader(self):

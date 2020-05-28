@@ -292,6 +292,7 @@ class AssetFinder(object):
             future_chain_predicates if future_chain_predicates is not None else {}
         )
         self._ordered_contracts = {}
+        self._chain_contracts = {}
 
         # Populated on first call to `lifetimes`.
         self._asset_lifetimes = {}
@@ -1094,7 +1095,8 @@ class AssetFinder(object):
         """
         asset_tbl = self.options_contracts
         data = (
-            sa.select([asset_tbl]).where(asset_tbl.c.occ_symbol == symbol)
+            sa.select([asset_tbl])
+            .where(asset_tbl.c.occ_symbol == symbol)
             .execute()
             .fetchone()
         )
@@ -1183,9 +1185,7 @@ class AssetFinder(object):
         # Could not find a value for this sid on the as_of_date.
         raise NoValueForSid(field=field_name, sid=sid)
 
-    def _get_contract_sids(self, root_symbol):
-        fc_cols = self.futures_contracts.c + self.options_contracts.c
-
+    def _get_contract_sids(self, fc_cols, root_symbol):
         return [
             r.sid
             for r in list(
@@ -1217,11 +1217,22 @@ class AssetFinder(object):
         else:
             raise SymbolNotFound(symbol=root_symbol)
 
+    def get_chain_contracts(self, root_symbol):
+        try:
+            return self._chain_contracts[root_symbol]
+        except KeyError:
+            contract_sids = self._get_contract_sids(
+                self.options_contracts.c, root_symbol
+            )
+            return deque(self.retrieve_all(contract_sids))
+
     def get_ordered_contracts(self, root_symbol):
         try:
             return self._ordered_contracts[root_symbol]
         except KeyError:
-            contract_sids = self._get_contract_sids(root_symbol)
+            contract_sids = self._get_contract_sids(
+                self.futures_contracts.c, root_symbol
+            )
             contracts = deque(self.retrieve_all(contract_sids))
             chain_predicate = self._future_chain_predicates.get(root_symbol, None)
             oc = OrderedContracts(root_symbol, contracts, chain_predicate)
@@ -1280,6 +1291,10 @@ class AssetFinder(object):
     futures_sids = property(
         _make_sids("futures_contracts"),
         doc="All of the sids for futures consracts in the asset finder.",
+    )
+    options_sids = property(
+        _make_sids("option_contracts"),
+        doc="All of the sids for options consracts in the asset finder.",
     )
     del _make_sids
 

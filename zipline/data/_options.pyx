@@ -7,12 +7,14 @@ from numpy import (
     float64,
     intp,
     uint32,
+    int64,
     zeros,
 )
 from numpy cimport (
     float64_t,
     intp_t,
     ndarray,
+    int64_t,
     uint32_t,
     uint8_t,
 )
@@ -143,8 +145,10 @@ cpdef _read_bcolz_data(ctable_t table,
         int nassets
         str column_name
         carray_t carray
-        ndarray[dtype=uint32_t, ndim=1] raw_data
-        ndarray[dtype=uint32_t, ndim=2] outbuf
+        ndarray[dtype=uint32_t, ndim=1] raw_data_u32
+        ndarray[dtype=int64_t, ndim=1] raw_data_i64
+        ndarray[dtype=uint32_t, ndim=2] outbuf_u32
+        ndarray[dtype=int64_t, ndim=2] outbuf_i64
         ndarray[dtype=uint8_t, ndim=2, cast=True] where_nan
         ndarray[dtype=float64_t, ndim=2] outbuf_as_float
         intp_t asset
@@ -160,18 +164,20 @@ cpdef _read_bcolz_data(ctable_t table,
     if not nassets== len(first_rows) == len(last_rows) == len(offsets):
         raise ValueError("Incompatible index arrays.")
 
-    for column_name in columns:
-        outbuf = zeros(shape=shape, dtype=uint32)
+    for column_name in [
+        col for col in columns if col not in ("delta", "gamma", "rho", "theta", "vega")
+    ]:
+        outbuf_u32 = zeros(shape=shape, dtype=uint32)
         if read_all:
-            raw_data = table[column_name][:]
+            raw_data_u32 = table[column_name][:]
 
             for asset in range(nassets):
                 first_row = first_rows[asset]
                 last_row = last_rows[asset]
                 offset = offsets[asset]
                 if first_row <= last_row:
-                    outbuf[offset:offset + (last_row + 1 - first_row), asset] =\
-                        raw_data[first_row:last_row + 1]
+                    outbuf_u32[offset:offset + (last_row + 1 - first_row), asset] =\
+                        raw_data_u32[first_row:last_row + 1]
                 else:
                     continue
         else:
@@ -184,18 +190,63 @@ cpdef _read_bcolz_data(ctable_t table,
                 out_start = offset
                 out_end = (last_row - first_row) + offset + 1
                 if first_row <= last_row:
-                    outbuf[offset:offset + (last_row + 1 - first_row), asset] =\
+                    outbuf_u32[offset:offset + (last_row + 1 - first_row), asset] =\
                         carray[first_row:last_row + 1]
                 else:
                     continue
 
-        if column_name in {'adjusted_underlying_close',
-                           'unadjusted_underlying_close', 'strike_price', 'ask',
-                           'bid'}:
-            where_nan = (outbuf == 0)
-            outbuf_as_float = outbuf.astype(float64) * .001
+        if column_name in {"adjusted_underlying_close",
+                            "ask",
+                            "bid",
+                            "close",
+                            "interest_rate",
+                            "implied_volatility",
+                            "mid",
+                            "moneyness",
+                            "option_value",
+                            "spread",
+                            "statistical_volatility",
+                            "strike_price",
+                            "unadjusted_underlying_close"}:
+            where_nan = (outbuf_u32 == 0)
+            outbuf_as_float = outbuf_u32.astype(float64) * .001
             outbuf_as_float[where_nan] = NAN
             results.append(outbuf_as_float)
         else:
-            results.append(outbuf)
+            results.append(outbuf_u32)
+
+    for column_name in ["delta", "gamma", "rho", "theta", "vega"]:
+        outbuf_i64 = zeros(shape=shape, dtype=int64)
+        if read_all:
+            raw_data_i64 = table[column_name][:]
+
+            for asset in range(nassets):
+                first_row = first_rows[asset]
+                last_row = last_rows[asset]
+                offset = offsets[asset]
+                if first_row <= last_row:
+                    outbuf_i64[offset:offset + (last_row + 1 - first_row), asset] =\
+                        raw_data_i64[first_row:last_row + 1]
+                else:
+                    continue
+        else:
+            carray = table[column_name]
+
+            for asset in range(nassets):
+                first_row = first_rows[asset]
+                last_row = last_rows[asset]
+                offset = offsets[asset]
+                out_start = offset
+                out_end = (last_row - first_row) + offset + 1
+                if first_row <= last_row:
+                    outbuf_i64[offset:offset + (last_row + 1 - first_row), asset] =\
+                        carray[first_row:last_row + 1]
+                else:
+                    continue
+
+        where_nan = (outbuf_i64 == 0)
+        outbuf_as_float = outbuf_i64.astype(float64) * .001
+        outbuf_as_float[where_nan] = NAN
+        results.append(outbuf_as_float)
+
     return results

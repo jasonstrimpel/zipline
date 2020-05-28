@@ -85,6 +85,24 @@ def continuous_future(root_symbol_str, offset=0, roll='volume', adjustment='mul'
         The continuous future specifier.
     """
 
+def option_chain(root_symbol_str, current_date):
+    """Lookup an option chain on `current_date` by it's root symbol
+
+    Parameters
+    ----------
+    root_symbol_str : str
+        The root symbol for the future chain.
+
+    current_date : pd.Timestamp
+        The date from which we extract the option chain
+
+    Returns
+    -------
+    option_chain : pandas.DataFrame
+        Option contracts in the row and option attributes in the columns
+
+    """
+
 def fetch_csv(url, pre_func=None, post_func=None, date_column='date', date_format=None, timezone='UTC', symbol=None, mask=True, symbol_column=None, special_params_checker=None, **kwargs):
     """Fetch a csv from a remote url and register the data so that it is
     queryable from the ``data`` object.
@@ -148,18 +166,37 @@ def future_symbol(symbol):
         Raised when no contract named 'symbol' is found.
     """
 
+def option_symbol(symbol):
+    """Lookup a options contract with a given symbol.
+
+    Parameters
+    ----------
+    symbol : str
+        The symbol of the desired contract.
+
+    Returns
+    -------
+    future : zipline.assets.Option
+        The future that trades with the name ``symbol``.
+
+    Raises
+    ------
+    SymbolNotFound
+        Raised when no contract named 'symbol' is found.
+    """
+
 def get_datetime(tz=None):
     """
-Returns the current simulation datetime.
+    Returns the current simulation datetime.
 
-Parameters
-----------
-tz : tzinfo or str, optional
-    The timezone to return the datetime in. This defaults to utc.
+    Parameters
+    ----------
+    tz : tzinfo or str, optional
+        The timezone to return the datetime in. This defaults to utc.
 
-Returns
--------
-dt : datetime
+    Returns
+    -------
+    dt : datetime
     The current simulation datetime converted to ``tz``.
     """
 

@@ -36,7 +36,7 @@ from math import copysign
 import numpy as np
 import logbook
 
-from zipline.assets import Future
+from zipline.assets import Future, Option
 import zipline.protocol as zp
 
 log = logbook.Logger('Performance')
@@ -195,7 +195,7 @@ class Position(object):
         # cost_basis positive, while subtracting the commission.
 
         prev_cost = self.cost_basis * self.amount
-        if isinstance(asset, Future):
+        if isinstance(asset, (Future, Option)):
             cost_to_use = cost / asset.price_multiplier
         else:
             cost_to_use = cost

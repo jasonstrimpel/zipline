@@ -24,7 +24,7 @@ import numpy as np
 import pandas as pd
 from six import iteritems, itervalues, PY2
 
-from zipline.assets import Future
+from zipline.assets import Future, Equity, Option
 from zipline.finance.transaction import Transaction
 import zipline.protocol as zp
 from zipline.utils.sentinel import sentinel
@@ -93,6 +93,7 @@ class PositionTracker(object):
         else:
             position = self.positions[asset]
 
+        # NOTE: This is where we open and close position quantities
         position.update(txn)
 
         if position.amount == 0:
@@ -508,6 +509,11 @@ class Ledger(object):
                     del self._payout_last_sale_prices[asset]
                 else:
                     self._payout_last_sale_prices[asset] = price
+
+        # NOTE: added the handler for Option asset type
+        elif isinstance(asset, Option):
+            multiplier = asset.price_multiplier
+            self._cash_flow(-(multiplier * transaction.price * transaction.amount))
         else:
             self._cash_flow(-(transaction.price * transaction.amount))
 
@@ -591,15 +597,23 @@ class Ledger(object):
         # check if we own any of these stocks so we know to pay them out when
         # the pay date comes.
         held_sids = set(position_tracker.positions)
-        if held_sids:
+
+        # TODO: Remove this check when set the adjustment_reader to None
+        assets_we_care_about = [
+            asset
+            for asset in held_sids
+            if isinstance(asset, Equity)
+        ]
+
+        if assets_we_care_about:
             cash_dividends = adjustment_reader.get_dividends_with_ex_date(
-                held_sids,
+                assets_we_care_about,
                 next_session,
                 asset_finder
             )
             stock_dividends = (
                 adjustment_reader.get_stock_dividends_with_ex_date(
-                    held_sids,
+                    assets_we_care_about,
                     next_session,
                     asset_finder
                 )

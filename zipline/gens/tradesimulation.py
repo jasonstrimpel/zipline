@@ -20,26 +20,33 @@ from zipline.protocol import BarData
 from zipline.utils.api_support import ZiplineAPI
 from six import viewkeys
 
+from zipline.assets import Equity
+
 from zipline.gens.sim_engine import (
     BAR,
     SESSION_START,
     SESSION_END,
     MINUTE_END,
-    BEFORE_TRADING_START_BAR
+    BEFORE_TRADING_START_BAR,
 )
 
-log = Logger('Trade Simulation')
+log = Logger("Trade Simulation")
 
 
 class AlgorithmSimulator(object):
 
-    EMISSION_TO_PERF_KEY_MAP = {
-        'minute': 'minute_perf',
-        'daily': 'daily_perf'
-    }
+    EMISSION_TO_PERF_KEY_MAP = {"minute": "minute_perf", "daily": "daily_perf"}
 
-    def __init__(self, algo, sim_params, data_portal, clock, benchmark_source,
-                 restrictions, universe_func):
+    def __init__(
+        self,
+        algo,
+        sim_params,
+        data_portal,
+        clock,
+        benchmark_source,
+        restrictions,
+        universe_func,
+    ):
 
         # ==============
         # Simulation
@@ -77,8 +84,9 @@ class AlgorithmSimulator(object):
         # Processor function for injecting the algo_dt into
         # user prints/logs.
         def inject_algo_dt(record):
-            if 'algo_dt' not in record.extra:
-                record.extra['algo_dt'] = self.simulation_dt
+            if "algo_dt" not in record.extra:
+                record.extra["algo_dt"] = self.simulation_dt
+
         self.processor = Processor(inject_algo_dt)
 
     def get_simulation_dt(self):
@@ -91,7 +99,7 @@ class AlgorithmSimulator(object):
             data_frequency=self.sim_params.data_frequency,
             trading_calendar=self.algo.trading_calendar,
             restrictions=self.restrictions,
-            universe_func=universe_func
+            universe_func=universe_func,
         )
 
     def transform(self):
@@ -102,8 +110,11 @@ class AlgorithmSimulator(object):
         metrics_tracker = algo.metrics_tracker
         emission_rate = metrics_tracker.emission_rate
 
-        def every_bar(dt_to_use, current_data=self.current_data,
-                      handle_data=algo.event_manager.handle_data):
+        def every_bar(
+            dt_to_use,
+            current_data=self.current_data,
+            handle_data=algo.event_manager.handle_data,
+        ):
             for capital_change in calculate_minute_capital_changes(dt_to_use):
                 yield capital_change
 
@@ -115,8 +126,9 @@ class AlgorithmSimulator(object):
 
             # handle any transactions and commissions coming out new orders
             # placed in the last bar
-            new_transactions, new_commissions, closed_orders = \
-                blotter.get_transactions(current_data)
+            new_transactions, new_commissions, closed_orders = blotter.get_transactions(
+                current_data, self.data_portal, self.user_id
+            )
 
             blotter.prune_orders(closed_orders)
 
@@ -142,32 +154,37 @@ class AlgorithmSimulator(object):
             for new_order in new_orders:
                 metrics_tracker.process_order(new_order)
 
-        def once_a_day(midnight_dt, current_data=self.current_data,
-                       data_portal=self.data_portal):
+        def once_a_day(
+            midnight_dt, current_data=self.current_data, data_portal=self.data_portal
+        ):
             # process any capital changes that came overnight
             for capital_change in algo.calculate_capital_changes(
-                    midnight_dt, emission_rate=emission_rate,
-                    is_interday=True):
+                midnight_dt, emission_rate=emission_rate, is_interday=True
+            ):
                 yield capital_change
 
             # set all the timestamps
             self.simulation_dt = midnight_dt
             algo.on_dt_changed(midnight_dt)
 
-            metrics_tracker.handle_market_open(
-                midnight_dt,
-                algo.data_portal,
-            )
+            metrics_tracker.handle_market_open(midnight_dt, algo.data_portal)
 
             # handle any splits that impact any positions or any open orders.
-            assets_we_care_about = (
-                viewkeys(metrics_tracker.positions) |
-                viewkeys(algo.blotter.open_orders)
+            assets_we_care_about = viewkeys(metrics_tracker.positions) | viewkeys(
+                algo.blotter.open_orders
             )
 
+            # TODO: Splits actually influence the price multipler and needs to be
+            #  handled. That should happen here.
             if assets_we_care_about:
-                splits = data_portal.get_splits(assets_we_care_about,
-                                                midnight_dt)
+                splits = data_portal.get_splits(
+                    [
+                        asset
+                        for asset in assets_we_care_about
+                        if isinstance(asset, Equity)
+                    ],
+                    midnight_dt,
+                )
                 if splits:
                     algo.blotter.process_splits(splits)
                     metrics_tracker.handle_splits(splits)
@@ -184,7 +201,8 @@ class AlgorithmSimulator(object):
             stack.enter_context(self.processor)
             stack.enter_context(ZiplineAPI(self.algo))
 
-            if algo.data_frequency == 'minute':
+            if algo.data_frequency == "minute":
+
                 def execute_order_cancellation_policy():
                     algo.blotter.execute_cancel_policy(SESSION_END)
 
@@ -192,8 +210,11 @@ class AlgorithmSimulator(object):
                     # process any capital changes that came between the last
                     # and current minutes
                     return algo.calculate_capital_changes(
-                        dt, emission_rate=emission_rate, is_interday=False)
+                        dt, emission_rate=emission_rate, is_interday=False
+                    )
+
             else:
+
                 def execute_order_cancellation_policy():
                     pass
 
@@ -211,6 +232,9 @@ class AlgorithmSimulator(object):
                     # End of the session.
                     positions = metrics_tracker.positions
                     position_assets = algo.asset_finder.retrieve_all(positions)
+
+                    # NOTE: If we want to test deep itm options for exersize
+                    # can do it here
                     self._cleanup_expired_assets(dt, position_assets)
 
                     execute_order_cancellation_policy()
@@ -222,17 +246,11 @@ class AlgorithmSimulator(object):
                     algo.on_dt_changed(dt)
                     algo.before_trading_start(self.current_data)
                 elif action == MINUTE_END:
-                    minute_msg = self._get_minute_message(
-                        dt,
-                        algo,
-                        metrics_tracker,
-                    )
+                    minute_msg = self._get_minute_message(dt, algo, metrics_tracker)
 
                     yield minute_msg
 
-            risk_message = metrics_tracker.handle_simulation_end(
-                self.data_portal,
-            )
+            risk_message = metrics_tracker.handle_simulation_end(self.data_portal)
             yield risk_message
 
     def _cleanup_expired_assets(self, dt, position_assets):
@@ -255,8 +273,9 @@ class AlgorithmSimulator(object):
             return acd is not None and acd <= dt
 
         # Remove positions in any sids that have reached their auto_close date.
-        assets_to_clear = \
-            [asset for asset in position_assets if past_auto_close_date(asset)]
+        assets_to_clear = [
+            asset for asset in position_assets if past_auto_close_date(asset)
+        ]
         metrics_tracker = algo.metrics_tracker
         data_portal = self.data_portal
         for asset in assets_to_clear:
@@ -267,8 +286,7 @@ class AlgorithmSimulator(object):
         # would not be processed until the first bar of the next day.
         blotter = algo.blotter
         assets_to_cancel = [
-            asset for asset in blotter.open_orders
-            if past_auto_close_date(asset)
+            asset for asset in blotter.open_orders if past_auto_close_date(asset)
         ]
         for asset in assets_to_cancel:
             blotter.cancel_all_orders_for_asset(asset)
@@ -284,11 +302,8 @@ class AlgorithmSimulator(object):
         """
         Get a perf message for the given datetime.
         """
-        perf_message = metrics_tracker.handle_market_close(
-            dt,
-            self.data_portal,
-        )
-        perf_message['daily_perf']['recorded_vars'] = algo.recorded_vars
+        perf_message = metrics_tracker.handle_market_close(dt, self.data_portal)
+        perf_message["daily_perf"]["recorded_vars"] = algo.recorded_vars
         return perf_message
 
     def _get_minute_message(self, dt, algo, metrics_tracker):
@@ -297,10 +312,7 @@ class AlgorithmSimulator(object):
         """
         rvars = algo.recorded_vars
 
-        minute_message = metrics_tracker.handle_minute_close(
-            dt,
-            self.data_portal,
-        )
+        minute_message = metrics_tracker.handle_minute_close(dt, self.data_portal)
 
-        minute_message['minute_perf']['recorded_vars'] = rvars
+        minute_message["minute_perf"]["recorded_vars"] = rvars
         return minute_message

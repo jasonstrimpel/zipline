@@ -80,7 +80,7 @@ from zipline.finance.asset_restrictions import (
     StaticRestrictions,
     SecurityListRestrictions,
 )
-from zipline.assets import Asset, Equity, Future
+from zipline.assets import Asset, Equity, Future, Option
 from zipline.gens.tradesimulation import AlgorithmSimulator
 from zipline.finance.metrics import MetricsTracker, load as load_metrics_set
 from zipline.pipeline import Pipeline
@@ -332,6 +332,8 @@ class TradingAlgorithm(object):
         self.event_manager = EventManager(create_event_context)
 
         self._handle_data = None
+
+        self.user_id = None
 
         def noop(*args, **kwargs):
             pass
@@ -1037,6 +1039,30 @@ class TradingAlgorithm(object):
         )
 
     @api_method
+    @preprocess(root_symbol_str=ensure_upper_case)
+    def option_chain(self, root_symbol_str, current_date):
+        """Lookup an option chain on `current_date` by it's root symbol
+
+        Parameters
+        ----------
+        root_symbol_str : str
+            The root symbol for the future chain.
+
+        current_date : pd.Timestamp
+            The date from which we extract the option chain
+
+        Returns
+        -------
+        option_chain : pandas.DataFrame
+            Option contracts in the row and option attributes in the columns
+
+        """
+        return self.data_portal.get_option_chain(
+            root_symbol_str,
+            current_date
+        )
+
+    @api_method
     @preprocess(
         symbol_str=ensure_upper_case,
         country_code=optionally(ensure_upper_case),
@@ -1149,6 +1175,28 @@ class TradingAlgorithm(object):
             Raised when no contract named 'symbol' is found.
         """
         return self.asset_finder.lookup_future_symbol(symbol)
+
+    @api_method
+    @preprocess(symbol=ensure_upper_case)
+    def option_symbol(self, symbol):
+        """Lookup a options contract with a given symbol.
+
+        Parameters
+        ----------
+        symbol : str
+            The symbol of the desired contract.
+
+        Returns
+        -------
+        future : zipline.assets.Option
+            The future that trades with the name ``symbol``.
+
+        Raises
+        ------
+        SymbolNotFound
+            Raised when no contract named 'symbol' is found.
+        """
+        return self.asset_finder.lookup_option_symbol(symbol)
 
     def _calculate_order_value_amount(self, asset, value):
         """
@@ -1489,7 +1537,7 @@ class TradingAlgorithm(object):
         return dt
 
     @api_method
-    def set_slippage(self, us_equities=None, us_futures=None):
+    def set_slippage(self, us_equities=None, us_futures=None, us_options=None):
         """
         Set the slippage models for the simulation.
 
@@ -1499,6 +1547,8 @@ class TradingAlgorithm(object):
             The slippage model to use for trading US equities.
         us_futures : FutureSlippageModel
             The slippage model to use for trading US futures.
+        us_option : OptionsSlippageModel
+            The slippage model to use for trading US options.
 
         Notes
         -----
@@ -1530,8 +1580,18 @@ class TradingAlgorithm(object):
                 )
             self.blotter.slippage_models[Future] = us_futures
 
+        if us_options is not None:
+            if Option not in us_options.allowed_asset_types:
+                raise IncompatibleSlippageModel(
+                    asset_type='options',
+                    given_model=us_options,
+                    supported_asset_types=us_options.allowed_asset_types,
+                )
+            self.blotter.slippage_models[Option] = us_options
+
+
     @api_method
-    def set_commission(self, us_equities=None, us_futures=None):
+    def set_commission(self, us_equities=None, us_futures=None, us_options=None):
         """Sets the commission models for the simulation.
 
         Parameters
@@ -1572,6 +1632,15 @@ class TradingAlgorithm(object):
                     supported_asset_types=us_futures.allowed_asset_types,
                 )
             self.blotter.commission_models[Future] = us_futures
+
+        if us_options is not None:
+            if Option not in us_options.allowed_asset_types:
+                raise IncompatibleCommissionModel(
+                    asset_type='options',
+                    given_model=us_options,
+                    supported_asset_types=us_options.allowed_asset_types,
+                )
+            self.blotter.commission_models[Option] = us_options
 
     @api_method
     def set_cancel_policy(self, cancel_policy):
@@ -2410,6 +2479,16 @@ class TradingAlgorithm(object):
             fn for fn in itervalues(vars(cls))
             if getattr(fn, 'is_api_method', False)
         ]
+
+    ##################
+    # User ID API
+    ##################
+    @api_method
+    def user_id(self, user_id):
+        """
+        Set the user id for the tradeblotter transactions blotter
+        """
+        self.user_id = user_id
 
 
 # Map from calendar name to default domain for that calendar.
