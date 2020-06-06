@@ -1,6 +1,5 @@
 # These imports are necessary to force module-scope register calls to happen.
 from . import quandl  # noqa
-from . import ivolatility # noqa
 from . import ivolatility_raw_iv # noqa
 from . import csvdir  # noqa
 

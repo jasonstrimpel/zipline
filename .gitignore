@@ -43,11 +43,10 @@ coverage.xml
 htmlcov
 nosetests.xml
 src/*
-!src/optlib
 
 # C Extensions
 *.o
-#*.so
+*.so
 *.out
 # git add -f if needed
 *.c
