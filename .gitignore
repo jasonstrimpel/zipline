@@ -47,7 +47,7 @@ src/*
 
 # C Extensions
 *.o
-*.so
+#*.so
 *.out
 # git add -f if needed
 *.c
