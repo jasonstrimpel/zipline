@@ -8,8 +8,6 @@ tmp/*
 *~
 .venv/
 
-zipline/finance/valuation/
-
 #mac autosaving file
 .DS_Store
 *.py[co]
@@ -44,7 +42,8 @@ develop-eggs
 coverage.xml
 htmlcov
 nosetests.xml
-src/
+src/*
+!src/optlib
 
 # C Extensions
 *.o
