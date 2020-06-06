@@ -8,6 +8,8 @@ tmp/*
 *~
 .venv/
 
+zipline/finance/valuation/
+
 #mac autosaving file
 .DS_Store
 *.py[co]
