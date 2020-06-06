@@ -46,6 +46,7 @@ class AlgorithmSimulator(object):
         benchmark_source,
         restrictions,
         universe_func,
+        user_id=None
     ):
 
         # ==============
@@ -88,6 +89,11 @@ class AlgorithmSimulator(object):
                 record.extra["algo_dt"] = self.simulation_dt
 
         self.processor = Processor(inject_algo_dt)
+
+        # =============
+        # Tradeblotter specific
+        # =============
+        self.user_id = user_id
 
     def get_simulation_dt(self):
         return self.simulation_dt

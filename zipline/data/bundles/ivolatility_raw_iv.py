@@ -2,6 +2,7 @@
 Module for building a complete daily dataset from ivolatility's raw iv options data.
 """
 from io import BytesIO
+from zipfile import ZipFile
 
 import numpy as np
 import pandas as pd
@@ -18,7 +19,15 @@ from . import core as bundles
 log = Logger(__name__)
 
 ONE_MEGABYTE = 1024 * 1024
-IVOLATILITY_DATA_URL = "https://www.dropbox.com/s/9n2vcrglvnt25by/ivraw.test.csv?"
+
+# rut eod data 2006-07-28 to 2014-09-04
+IVOLATILITY_DATA_URL = "https://www.dropbox.com/s/w59tcq8jc02w0vp/rut-eod-20060728-20140904.zip?"
+
+# rut eod data 2000-11-01 to 2020-05-19
+# IVOLATILITY_DATA_URL = "https://www.dropbox.com/s/494wx0vum1y0vx1/rut-eod.zip?"
+
+# rut 1545 snapshot data 2003-09-18 to 2020-05-19
+# IVOLATILITY_DATA_URL = "https://www.dropbox.com/s/e70501splbwsomt/rut-1545.zip?"
 
 QUANDL_PATH = most_recent_data("quandl", pd.Timestamp("now"))
 
@@ -34,56 +43,69 @@ def format_metadata_url(api_key):
 def load_data_table(file, index_col, show_progress=False):
     """ Load data table from CSV file provided by ivolatility.
     """
-    if show_progress:
-        log.info("Parsing raw data.")
+    with ZipFile(file) as zip_file:
+        data_tables = []
+        file_names = [x for x in zip_file.namelist() if not x.startswith("__")]
+        assert len(file_names) > 1, "Expected at least one file from iVolatility."
+        for data_file in file_names:
+            with zip_file.open(data_file) as table_file:
+                if show_progress:
+                    log.info(f"Parsing raw data from {table_file.name}.")
 
-    data_table = pd.read_csv(
-        file,
-        parse_dates=["date", "expiration"],
-        index_col=index_col,
-        usecols=[
-            "date",
-            "symbol",
-            "exchange",
-            "adjusted close",
-            "option symbol",
-            "expiration",
-            "strike",
-            "call/put",
-            "style",
-            "ask",
-            "bid",
-            "volume",
-            "open interest",
-            "stock price for iv",
-            "mean price",
-            "iv",
-            # "*",
-            "delta",
-            "vega",
-            "gamma",
-            "theta",
-            "rho",
-        ],
-    )
-    data_table.rename(
-        columns={
-            "symbol": "root_symbol",
-            "adjusted close": "adjusted_underlying_close",
-            "option symbol": "symbol",
-            "strike": "strike_price",
-            "expiration": "expiration_date",
-            "call/put": "option_type",
-            "open interest": "open_interest",
-            "stock price for iv": "unadjusted_underlying_close",
-            "mean price": "mid",
-            "iv": "implied_volatility",
-            # "*": "interpreted"
-        },
-        inplace=True,
-        copy=False,
-    )
-    return data_table
+                data_table = pd.read_csv(
+                    table_file,
+                    parse_dates=["date", "option_expiration"],
+                    index_col=index_col,
+                    usecols=[
+                        "date",
+                        "symbol",  # -> root_symbol
+                        "exchange",
+                        "company_name",  # -> asset_name
+                        "stock_price_close",  # -> adjusted_underlying_close
+                        "option_symbol",
+                        "option_expiration",  # -> expiration_date
+                        "strike",  # -> strike_price
+                        "call_put",  # -> option_type
+                        "style",
+                        # "open",
+                        # "high",
+                        # "low",
+                        # "close",
+                        "bid",
+                        "ask",
+                        "mean_price",  # -> mid
+                        # "settlement",
+                        "iv",  # -> implied_volatility
+                        "volume",
+                        "open_interest",
+                        "stock_price_for_iv",  # -> unadjusted_underlying_close
+                        # "forward_price",
+                        # "isinterpolated",
+                        "delta",
+                        "vega",
+                        "gamma",
+                        "theta",
+                        "rho",
+                    ],
+                )
+                data_table.rename(
+                    columns={
+                        "symbol": "root_symbol",
+                        "company_name": "asset_name",
+                        "stock_price_close": "adjusted_underlying_close",
+                        "option_symbol": "symbol",
+                        "option_expiration": "expiration_date",
+                        "strike": "strike_price",
+                        "call_put": "option_type",
+                        "mean_price": "mid",
+                        "iv": "implied_volatility",
+                        "stock_price_for_iv": "unadjusted_underlying_close",
+                    },
+                    inplace=True,
+                    copy=False,
+                )
+                data_tables.append(data_table)
+    return pd.concat(data_tables)
 
 
 def fetch_data_table(api_key, show_progress, retries):
@@ -134,6 +156,7 @@ def gen_asset_metadata(data, show_progress):
         {
             "symbol": "first",
             "root_symbol": "first",
+            "asset_name": "first",
             "date": [np.min, np.max],
             "exchange": "first",
             "expiration_date": "first",
@@ -148,7 +171,7 @@ def gen_asset_metadata(data, show_progress):
     del data["date"]
     data.columns = data.columns.get_level_values(0)
 
-    data["asset_name"] = ""
+    data["asset_name"] = data.asset_name
     data["tick_size"] = 0.01
     data["multiplier"] = 100.0
     data["first_traded"] = data["start_date"]
@@ -237,7 +260,12 @@ def parse_pricing_and_vol(data, sessions, symbol_map):
         yield asset_id, asset_data
 
 
-@bundles.register("ivolatility-raw-iv")
+@bundles.register(
+    "ivolatility-raw-iv",
+    # start and end sessions of the dtr trading examples
+    start_session=pd.Timestamp("2006-07-28", tz="UTC"),
+    end_session=pd.Timestamp("2014-09-04", tz="UTC")
+)
 def ivolatility_raw_iv_bundle(
     environ,
     asset_db_writer,

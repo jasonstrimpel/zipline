@@ -1,13 +1,8 @@
-from zipline.api import user_id
-
 import pyfolio as pf
 
 
 def initialize(context):
-
-    # user id exists in algorithm.TradeAlgorithm, blotter.Blotter and
-    # simulation_blotter.SimulationBlotter and simulation_blotter.TradeBlotterAppBlotter
-    user_id(555)
+    pass
 
 
 def before_trading_start(context, data):

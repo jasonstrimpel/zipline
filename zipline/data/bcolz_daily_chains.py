@@ -278,6 +278,9 @@ class BcolzDailyChainWriter(object):
                     yield asset_id, table
 
         for asset_id, table in iterator:
+
+            logger.info(f"Writing asset id {asset_id} to disk")
+
             nrows = len(table)
             for column_name in columns:
                 if column_name == "id":
@@ -337,6 +340,7 @@ class BcolzDailyChainWriter(object):
             # offset used for output alignment by the reader.
             calendar_offset[asset_key] = sessions.get_loc(asset_first_day)
 
+        logger.info("Writing complete table to disk")
         # This writes the table to disk.
         full_table = ctable(
             columns=[columns[colname] for colname in OPTION_PRICING_BCOLZ_COLUMNS],

@@ -1,13 +1,18 @@
 from collections import namedtuple
 
+import pyfolio as pf
 import numpy as np
 import pandas as pd
 from pandas.tseries.offsets import BDay
 
+from logbook import Logger
 from functools import partial
 
-from zipline.api import order, option_symbol, option_chain, record, sid
+from zipline.api import order, option_chain, record, sid
 from zipline.finance import commission, slippage
+
+
+log = Logger(__name__)
 
 
 Leg = namedtuple("Leg", ["option", "amount"])
@@ -431,25 +436,24 @@ class IronCondors(object):
 
 
 def initialize(context):
-    context.root_symbol = "IBM"
-    context.has_ordered = False
+    context.root_symbol = "RUT"
 
     context.backtest_params = {
         # days to expiration to enter trade
-        "trade_entry_dte": 66,
+        "trade_entry_dte": 80,
         # days to expiration to exit trade
-        "trade_exit_dte": 33,
+        "trade_exit_dte": 8,
         # look for positions less than this moneyness (< 1.0 is otm)
-        "moneyness": 1.25,
+        "moneyness": 1.5,
         # near strike width, the short strike
         "wing_width": 20,
         # long strike, how many strikes out from the short strike
         "strikes_out": 1,
         # only look at condors with this net delta plus an error
-        "net_delta_constraint": 0.12,
+        "net_delta_constraint": 0.16,
         "delta_epsilon": 0.1,
         # quantity of [LongPut, ShortPut, ShortCall, LongCall] (all > 0)
-        "qty": [100, 100, 100, 100],
+        "qty": [10, 10, 10, 10],
         # sell means a credit spread; default position
         "side": "sell",
     }
@@ -457,12 +461,12 @@ def initialize(context):
     # if short (credit) then something like 0.15 means at 15% of the original
     # credit take the winner; if long (debit) something like 2.0 means at 200%
     # of the original debit, take the winner
-    context.limit_percent = 0.50  # 0.15 or 2.0
+    context.limit_percent = 0.0  # 0.15 or 2.0
     # trade exit at a loser as a percentage of the original position value
     # if short (credit) then something like 1.6 means at 160% of the original credit
     # take the loser; if long (debit) then something like 0.75 means at 75%
     # of the original credit, take the loser
-    context.stop_percent = 2.0  # 1.60
+    context.stop_percent = 4.0  # 1.60
     # list of strategy which is a complex options option
     context.complex_positions = []
 
@@ -476,12 +480,15 @@ def initialize(context):
 
 
 def handle_data(context, data):
+    log.info(f"Trade date {data.current_session}")
 
     # look for existing strategies to exit first which avoids immeditely
     # exiting an entered strategy
     if context.complex_positions:
+        log.info(f"Found positions to trade: {context.complex_positions}")
 
         for complex_position in context.complex_positions:
+            log.info(f"Processing {data.current_session}")
 
             # check if any date to exit trade has been exceeded. using any
             # covers the case where there are uneven expirations. this is a bad
@@ -553,18 +560,18 @@ def handle_data(context, data):
         for _, trade in trades.iterrows():
             sids = trade[
                 [
-                    # "short_call_sid",
+                    "short_call_sid",
                     "long_call_sid",
-                    # "short_put_sid",
-                    # "long_put_sid"
+                    "short_put_sid",
+                    "long_put_sid"
                 ]
             ].values
             amounts = trade[
                 [
-                    # "short_call_amount",
+                    "short_call_amount",
                     "long_call_amount",
-                    # "short_put_amount",
-                    # "long_put_amount",
+                    "short_put_amount",
+                    "long_put_amount",
                 ]
             ].values
 
@@ -578,6 +585,9 @@ def handle_data(context, data):
 
 
 def analyze(context, perf):
-    ctx = context
-    prf = perf
-    a = 1
+
+    returns, positions, transactions = pf.utils.extract_rets_pos_txn_from_zipline(perf)
+
+    round_trip_returns = pf.round_trips.extract_round_trips(
+        transactions.drop("dt", axis=1)
+    )

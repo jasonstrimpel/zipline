@@ -333,6 +333,7 @@ class TradingAlgorithm(object):
 
         self._handle_data = None
 
+        # NOTE: This is added for user_id
         self.user_id = None
 
         def noop(*args, **kwargs):
@@ -393,6 +394,8 @@ class TradingAlgorithm(object):
         self.initialized = False
 
         self.initialize_kwargs = initialize_kwargs or {}
+
+        self.user_id = initialize_kwargs.get("user_id")
 
         self.benchmark_sid = benchmark_sid
 
@@ -584,7 +587,9 @@ class TradingAlgorithm(object):
             self._create_clock(),
             benchmark_source,
             self.restrictions,
-            universe_func=self._calculate_universe
+            universe_func=self._calculate_universe,
+            # NOTE: This is added for user_id
+            user_id=self.user_id
         )
 
         metrics_tracker.handle_start_of_simulation(benchmark_source)
@@ -2479,16 +2484,6 @@ class TradingAlgorithm(object):
             fn for fn in itervalues(vars(cls))
             if getattr(fn, 'is_api_method', False)
         ]
-
-    ##################
-    # User ID API
-    ##################
-    @api_method
-    def user_id(self, user_id):
-        """
-        Set the user id for the tradeblotter transactions blotter
-        """
-        self.user_id = user_id
 
 
 # Map from calendar name to default domain for that calendar.

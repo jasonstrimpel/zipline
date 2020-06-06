@@ -142,8 +142,19 @@ def load_market_data(
     # this _should_ be ok because the ffill and bfill dates are outside the range
     # we're interested based on the incoming data bundle
     all_dt = br.index.union(tc.index).reindex(trading_days)[0]
-    br = br.reindex(all_dt, method="ffill").fillna(method="bfill")
-    tc = tc.reindex(all_dt, method="ffill").fillna(method="bfill")
+    # group by and take the first to avoid duplicate indexes
+    br = (
+        br.groupby(br.index)
+        .first()
+        .reindex(all_dt, method="ffill")
+        .fillna(method="bfill")
+    )
+    tc = (
+        tc.groupby(tc.index)
+        .first()
+        .reindex(all_dt, method="ffill")
+        .fillna(method="bfill")
+    )
 
     benchmark_returns = br[br.index.slice_indexer(first_date, last_date)]
     treasury_curves = tc[tc.index.slice_indexer(first_date, last_date)]
