@@ -29,8 +29,6 @@ IVOLATILITY_DATA_URL = "https://www.dropbox.com/s/w59tcq8jc02w0vp/rut-eod-200607
 # rut 1545 snapshot data 2003-09-18 to 2020-05-19
 # IVOLATILITY_DATA_URL = "https://www.dropbox.com/s/e70501splbwsomt/rut-1545.zip?"
 
-QUANDL_PATH = most_recent_data("quandl", pd.Timestamp("now"))
-
 
 def format_metadata_url(api_key):
     """ Build the query URL for Quandl WIKI Prices metadata.
