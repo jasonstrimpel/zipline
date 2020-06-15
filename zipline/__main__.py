@@ -274,6 +274,7 @@ def run(ctx,
         environ=os.environ,
         blotter=blotter,
         benchmark_returns=None,
+        user_id=100
     )
 
     if output == '-':

@@ -73,7 +73,8 @@ def _run(handle_data,
          local_namespace,
          environ,
          blotter,
-         benchmark_returns):
+         benchmark_returns,
+         user_id=None):
     """Run a backtest for the given algorithm.
 
     This is shared between the cli and :func:`zipline.run_algo`.
@@ -195,6 +196,7 @@ def _run(handle_data,
         metrics_set=metrics_set,
         blotter=blotter,
         benchmark_returns=benchmark_returns,
+        user_id=user_id,
         **{
             'initialize': initialize,
             'handle_data': handle_data,

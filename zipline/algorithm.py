@@ -232,6 +232,7 @@ class TradingAlgorithm(object):
                  capital_changes=None,
                  get_pipeline_loader=None,
                  create_event_context=None,
+                 user_id=None,
                  **initialize_kwargs):
         # List of trading controls to be used to validate orders.
         self.trading_controls = []
@@ -323,6 +324,9 @@ class TradingAlgorithm(object):
         # functions.
         self.algoscript = script
 
+        # NOTE: This is added for user_id
+        self.user_id = user_id
+
         self._initialize = None
         self._before_trading_start = None
         self._analyze = None
@@ -332,9 +336,6 @@ class TradingAlgorithm(object):
         self.event_manager = EventManager(create_event_context)
 
         self._handle_data = None
-
-        # NOTE: This is added for user_id
-        self.user_id = None
 
         def noop(*args, **kwargs):
             pass
@@ -394,8 +395,6 @@ class TradingAlgorithm(object):
         self.initialized = False
 
         self.initialize_kwargs = initialize_kwargs or {}
-
-        self.user_id = initialize_kwargs.get("user_id")
 
         self.benchmark_sid = benchmark_sid
 

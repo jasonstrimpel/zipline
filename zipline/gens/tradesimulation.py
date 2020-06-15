@@ -46,7 +46,7 @@ class AlgorithmSimulator(object):
         benchmark_source,
         restrictions,
         universe_func,
-        user_id=None
+        user_id
     ):
 
         # ==============
