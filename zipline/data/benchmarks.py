@@ -64,7 +64,7 @@ def get_benchmark_returns(symbol, bundle_name="quandl-eod", calendar_name="NYSE"
         data_frequency="daily",
         field="close",
     )
-    prices.columns = symbol
+    prices.columns = [symbol]
 
     #
     # api_key = os.environ.get('IEX_API_KEY')

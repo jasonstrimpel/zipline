@@ -277,7 +277,7 @@ def ensure_treasury_data(symbol, first_date, last_date, now, environ=None):
     try:
         data = loader_module.get_treasury_data(first_date, last_date)
         data.to_csv(get_data_filepath(filename, environ))
-    except (OSError, IOError, HTTPError):
+    except (FileNotFoundError, OSError, IOError, HTTPError):
         logger.exception("failed to cache treasury data")
     if not has_data_for_dates(data, first_date, last_date):
         logger.warn(
@@ -296,19 +296,16 @@ def _load_cached_data(
     filename, first_date, last_date, now, resource_name, environ=None
 ):
     if resource_name == "benchmark":
-
         def from_csv(path):
             return pd.read_csv(
                 path,
                 parse_dates=[0],
                 index_col=0,
-                header=None,
                 # Pass squeeze=True so that we get a series instead of a frame.
                 squeeze=True,
             ).tz_localize("UTC")
 
     else:
-
         def from_csv(path):
             return pd.read_csv(path, parse_dates=[0], index_col=0).tz_localize("UTC")
 
@@ -335,7 +332,7 @@ def _load_cached_data(
                 )
                 return data
 
-        except (OSError, IOError, ValueError) as e:
+        except (FileNotFoundError, OSError, IOError, ValueError) as e:
             # These can all be raised by various versions of pandas on various
             # classes of malformed input.  Treat them all as cache misses.
             logger.info(
