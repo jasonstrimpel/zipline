@@ -212,7 +212,7 @@ def ensure_benchmark_data(
     try:
         data = get_benchmark_returns(symbol)
         data.to_csv(get_data_filepath(filename, environ))
-    except (OSError, IOError, HTTPError):
+    except (FileNotFoundError, OSError, IOError, HTTPError):
         logger.exception("Failed to cache the new benchmark returns")
         raise
     if not has_data_for_dates(data, first_date, last_date):
