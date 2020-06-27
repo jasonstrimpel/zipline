@@ -232,7 +232,7 @@ class TradingAlgorithm(object):
                  capital_changes=None,
                  get_pipeline_loader=None,
                  create_event_context=None,
-                 user_id=None,
+                 tradeblotter_params=None,
                  **initialize_kwargs):
         # List of trading controls to be used to validate orders.
         self.trading_controls = []
@@ -324,9 +324,6 @@ class TradingAlgorithm(object):
         # functions.
         self.algoscript = script
 
-        # NOTE: This is added for user_id
-        self.user_id = user_id
-
         self._initialize = None
         self._before_trading_start = None
         self._analyze = None
@@ -395,6 +392,7 @@ class TradingAlgorithm(object):
         self.initialized = False
 
         self.initialize_kwargs = initialize_kwargs or {}
+        self.tradeblotter_params = tradeblotter_params
 
         self.benchmark_sid = benchmark_sid
 
@@ -588,7 +586,7 @@ class TradingAlgorithm(object):
             self.restrictions,
             universe_func=self._calculate_universe,
             # NOTE: This is added for user_id
-            user_id=self.user_id
+            tradeblotter_args=self.tradeblotter_params
         )
 
         metrics_tracker.handle_start_of_simulation(benchmark_source)

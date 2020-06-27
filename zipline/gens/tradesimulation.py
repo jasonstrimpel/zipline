@@ -46,7 +46,7 @@ class AlgorithmSimulator(object):
         benchmark_source,
         restrictions,
         universe_func,
-        user_id
+        tradeblotter_args
     ):
 
         # ==============
@@ -93,7 +93,7 @@ class AlgorithmSimulator(object):
         # =============
         # Tradeblotter specific
         # =============
-        self.user_id = user_id
+        self.tradeblotter_args = tradeblotter_args
 
     def get_simulation_dt(self):
         return self.simulation_dt
@@ -133,7 +133,7 @@ class AlgorithmSimulator(object):
             # handle any transactions and commissions coming out new orders
             # placed in the last bar
             new_transactions, new_commissions, closed_orders = blotter.get_transactions(
-                current_data, self.data_portal, self.user_id
+                current_data, self.data_portal, self.tradeblotter_args
             )
 
             blotter.prune_orders(closed_orders)

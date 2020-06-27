@@ -318,7 +318,7 @@ class SimulationBlotter(Blotter):
             for order in orders_to_modify:
                 order.handle_split(ratio)
 
-    def get_transactions(self, bar_data, data_portal=None, user_id=None):
+    def get_transactions(self, bar_data, data_portal=None, tradeblotter_args=None):
         """
         Creates a list of transactions based on the current open orders,
         slippage model, and commission model.

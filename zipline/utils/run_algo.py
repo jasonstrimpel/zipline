@@ -74,7 +74,7 @@ def _run(handle_data,
          environ,
          blotter,
          benchmark_returns,
-         user_id=None):
+         tradeblotter_params=None):
     """Run a backtest for the given algorithm.
 
     This is shared between the cli and :func:`zipline.run_algo`.
@@ -196,7 +196,7 @@ def _run(handle_data,
         metrics_set=metrics_set,
         blotter=blotter,
         benchmark_returns=benchmark_returns,
-        user_id=user_id,
+        tradeblotter_params=tradeblotter_params,
         **{
             'initialize': initialize,
             'handle_data': handle_data,
@@ -205,6 +205,7 @@ def _run(handle_data,
         } if algotext is None else {
             'algo_filename': getattr(algofile, 'name', '<algorithm>'),
             'script': algotext,
+            # only including tradeblotter args when using algotext
         }
     ).run()
 

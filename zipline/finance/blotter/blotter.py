@@ -152,7 +152,7 @@ class Blotter(with_metaclass(ABCMeta)):
         raise NotImplementedError('process_splits')
 
     @abstractmethod
-    def get_transactions(self, bar_data, data_portal=None, user_id=None):
+    def get_transactions(self, bar_data, data_portal=None, tradeblotter_args=None):
         """
         Creates a list of transactions based on the current open orders,
         slippage model, and commission model.
@@ -160,7 +160,7 @@ class Blotter(with_metaclass(ABCMeta)):
         Parameters
         ----------
         data_portal
-        user_id
+        tradeblotter_args
         bar_data: zipline._protocol.BarData
 
         Notes
